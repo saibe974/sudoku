@@ -21,18 +21,25 @@
       </div>
     </header>
 
+
     <section class="card">
+
       <div class="card-header toolbar">
-        <button class="btn" id="toggleCandidatesBtn" title="Afficher/Masquer/Régénérer les candidats">Afficher candidats</button>
-        <button class="btn" id="clearValuesBtn" title="Efface seulement les valeurs (conserve les 'données')">Effacer valeurs</button>
-        <!-- <button class="btn" id="clearHighlightsBtn" title="Effacer les surlignages">Effacer surlignage</button>
-        <button class="btn" id="clearAllBtn" title="Réinitialise tout">Tout effacer</button> -->
-        <br/>
-        <button class="btn" id="prevStepBtn">Étape précédente</button>
-        <select class="btn" id="techniqueSelect" title="Choisir une technique"></select>
-        <button class="btn" id="nextStepBtn" title="Appliquer un pas de résolution">Étape suivante</button>
+        <div class="">
+          <button class="btn" id="toggleCandidatesBtn" title="Afficher/Masquer/Régénérer les candidats">Afficher candidats</button>
+          <button class="btn" id="clearValuesBtn" title="Efface seulement les valeurs (conserve les 'données')">Effacer valeurs</button>
+        </div>
+        <div>
+          <button class="btn" id="prevStepBtn">Étape précédente</button>
+          <select class="btn" id="techniqueSelect" title="Choisir une technique"></select>
+          <button class="btn" id="nextStepBtn" title="Appliquer un pas de résolution">Étape suivante</button>
+        </div>
+
+
         <input style="display:none" type="file" id="fileInput" accept="application/json,.json" />
       </div>
+
+
       <div class="grid-wrapper">
         <table class="sudoku-grid" aria-label="Grille Sudoku 9×9" id="grid"></table>
       </div>

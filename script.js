@@ -552,7 +552,10 @@ function syncPopoverButtons() {
 /* ====== AFFICHAGE CANDIDATS ====== */
 function updateCandidatesVisibilityButton() {
     const hasAnyCandidates = candidates.some(row => row.some(cell => cell.length > 0));
-    if (!showCandidates) {
+    if (!hasAnyCandidates) {
+        toggleCandidatesBtn.textContent = 'candidats';
+    }
+    else if (!showCandidates) {
         toggleCandidatesBtn.textContent = 'Afficher candidats';
     } else if (!hasAnyCandidates) {
         toggleCandidatesBtn.textContent = 'Afficher candidats';
@@ -616,7 +619,6 @@ fileInput.addEventListener('change', e => {
 });
 
 clearValuesBtn.addEventListener('click', clearValues);
-clearAllBtn.addEventListener('click', clearAll);
 
 toggleCandidatesBtn.addEventListener('click', () => {
     const hasAnyCandidates = candidates.some(row => row.some(cell => cell.length > 0));
