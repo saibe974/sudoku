@@ -2,14 +2,14 @@ const gridEl = document.getElementById('grid');
 const givenModeEl = document.getElementById('givenMode');
 const statusEl = document.getElementById('status');
 
-const jsonArea = document.getElementById('jsonArea');
-const importBtn = document.getElementById('importBtn');
+// const jsonArea = document.getElementById('jsonArea');
+// const importBtn = document.getElementById('importBtn');
 const exampleBtn = document.getElementById('exampleBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const fileInput = document.getElementById('fileInput');
 
 const clearValuesBtn = document.getElementById('clearValuesBtn');
-const clearAllBtn = document.getElementById('clearAllBtn');
+const clearAllBtn = document.getElementById('clearAllBtn'); // a modifier en toogle
 const toggleCandidatesBtn = document.getElementById('toggleCandidatesBtn');
 
 const candPopover = document.getElementById('candPopover');
@@ -75,10 +75,17 @@ function buildGrid() {
                 renderCell(r, c);
             });
 
-            // clic gauche sur la cellule: si Mode Données, toggle 'given'
-            td.addEventListener('click', () => {
-                if (!givenModeEl.checked) return;
-                td.classList.toggle('given');
+            // clic gauche sur la cellule
+            td.addEventListener('click', (evt) => {
+                // Si Mode Données activé, on toggle la classe 'given'
+                if (givenModeEl && givenModeEl.checked) {
+                    td.classList.toggle('given');
+                    return;
+                }
+
+                // Sinon, on ouvre le popover de valeur à gauche de la cellule
+                evt.preventDefault();
+                openValuePopoverFor(r, c, td);
             });
 
             // clic droit → popover candidats
@@ -282,22 +289,22 @@ function setStatus(msg, type = '') {
 }
 
 // Export/Import
-function exportToTextarea() {
-    const state = getState();
-    jsonArea.value = JSON.stringify(state, null, 2);
-    setStatus('Exporté vers la zone JSON.', 'ok');
-}
+// function exportToTextarea() {
+//     const state = getState();
+//     jsonArea.value = JSON.stringify(state, null, 2);
+//     setStatus('Exporté vers la zone JSON.', 'ok');
+// }
 
-function importFromTextarea() {
-    try {
-        const obj = JSON.parse(jsonArea.value);
-        validateState(obj);
-        setState(obj);
-        setStatus('Import réussi depuis la zone JSON.', 'ok');
-    } catch (e) {
-        setStatus('Erreur d\'import : ' + e.message, 'err');
-    }
-}
+// function importFromTextarea() {
+//     try {
+//         const obj = JSON.parse(jsonArea.value);
+//         validateState(obj);
+//         setState(obj);
+//         setStatus('Import réussi depuis la zone JSON.', 'ok');
+//     } catch (e) {
+//         setStatus('Erreur d\'import : ' + e.message, 'err');
+//     }
+// }
 
 function validateState(obj) {
     if (!obj || typeof obj !== 'object') throw new Error('Objet JSON invalide.');
@@ -427,7 +434,17 @@ function importFromFile(file) {
             const obj = JSON.parse(reader.result);
             validateState(obj);
             setState(obj);
-            jsonArea.value = JSON.stringify(obj, null, 2);
+            // si la zone JSON existe, on la met à jour (optionnel)
+            if (typeof jsonArea !== 'undefined' && jsonArea) jsonArea.value = JSON.stringify(obj, null, 2);
+
+            // Vider les explications affichées
+            const explanationsDiv = document.getElementById('explanations');
+            if (explanationsDiv) explanationsDiv.innerHTML = '';
+
+            // Mettre le bouton candidats en mode 'Afficher candidats' (candidats masqués)
+            showCandidates = false;
+            updateCandidatesVisibilityButton();
+
             setStatus('Import depuis fichier réussi.', 'ok');
         } catch (e) {
             setStatus('Erreur de parsing du fichier : ' + e.message, 'err');
@@ -511,6 +528,109 @@ function buildPopover() {
     });
 }
 
+/* ====== POPOVER VALEUR (clic gauche) ====== */
+const valuePopoverId = 'valuePopover';
+function buildValuePopover() {
+    let el = document.getElementById(valuePopoverId);
+    if (el) return;
+    el = document.createElement('div');
+    el.id = valuePopoverId;
+    el.className = 'cand-popover';
+    el.setAttribute('aria-hidden', 'true');
+    el.style.width = '120px';
+
+    const wrap = document.createElement('div');
+    wrap.style.display = 'grid';
+    wrap.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    wrap.style.gap = '6px';
+
+    for (let n = 1; n <= 9; n++) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cand-btn';
+        btn.textContent = String(n);
+        btn.dataset.n = n;
+        btn.addEventListener('click', () => {
+            // pose la valeur dans la cellule ciblée
+            if (!valuePopoverTarget) return;
+            const { r, c } = valuePopoverTarget;
+            const td = gridEl.rows[r].cells[c];
+            const input = td.querySelector('input');
+            input.value = String(n);
+            candidates[r][c] = [];
+            renderCell(r, c);
+            updateConflicts();
+            hideValuePopover();
+            setStatus('Valeur placée : ' + n, 'ok');
+        });
+        wrap.appendChild(btn);
+    }
+
+    // bouton 'clear'
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'btn xs';
+    clearBtn.textContent = 'Effacer';
+    clearBtn.addEventListener('click', () => {
+        if (!valuePopoverTarget) return;
+        const { r, c } = valuePopoverTarget;
+        const td = gridEl.rows[r].cells[c];
+        const input = td.querySelector('input');
+        input.value = '';
+        candidates[r][c] = [];
+        renderCell(r, c);
+        updateConflicts();
+        hideValuePopover();
+        setStatus('Valeur effacée.', 'ok');
+    });
+
+    el.appendChild(wrap);
+    const footer = document.createElement('div');
+    footer.style.marginTop = '8px';
+    footer.style.display = 'flex';
+    footer.style.justifyContent = 'center';
+    footer.appendChild(clearBtn);
+    el.appendChild(footer);
+
+    document.body.appendChild(el);
+}
+
+let valuePopoverTarget = null;
+function openValuePopoverFor(r, c, td) {
+    buildValuePopover();
+    const el = document.getElementById(valuePopoverId);
+    if (!el) return;
+    valuePopoverTarget = { r, c };
+    el.setAttribute('aria-hidden', 'false');
+    // positionner à gauche de la cellule
+    const rect = td.getBoundingClientRect();
+    const popRect = el.getBoundingClientRect();
+    let x = rect.left - popRect.width - 8;
+    let y = rect.top;
+    // si déborde à gauche, positionner à droite
+    if (x < 8) x = rect.right + 8;
+    // ajuster si dépasse verticalement
+    const { innerHeight: h } = window;
+    if (y + popRect.height > h - 8) y = h - popRect.height - 8;
+    el.style.transform = `translate(${x}px, ${y}px)`;
+}
+
+function hideValuePopover() {
+    const el = document.getElementById(valuePopoverId);
+    if (!el) return;
+    el.setAttribute('aria-hidden', 'true');
+    el.style.transform = 'translate(-9999px, -9999px)';
+    valuePopoverTarget = null;
+}
+
+// fermer value popover au clic extérieur
+document.addEventListener('mousedown', (e) => {
+    const el = document.getElementById(valuePopoverId);
+    if (!el) return;
+    if (el.getAttribute('aria-hidden') === 'true') return;
+    if (!el.contains(e.target)) hideValuePopover();
+});
+
 function openPopover(clientX, clientY, r, c) {
     popoverTarget = { r, c };
     syncPopoverButtons();
@@ -584,7 +704,7 @@ function loadExample() {
     };
     // On commence sans candidats pré-remplis
     setState(example);
-    jsonArea.value = JSON.stringify(example, null, 2);
+    // jsonArea.value = JSON.stringify(example, null, 2);
     setStatus('Exemple chargé.', 'ok');
 }
 
@@ -608,7 +728,7 @@ function fillAutoCandidates() {
 
 
 /* ====== Events ====== */
-importBtn.addEventListener('click', importFromTextarea);
+// importBtn.addEventListener('click', importFromTextarea);
 exampleBtn.addEventListener('click', loadExample);
 
 downloadBtn.addEventListener('click', downloadJSON);

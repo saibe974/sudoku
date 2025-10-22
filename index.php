@@ -1,10 +1,16 @@
+<?php
+$version = '1.0.0';
+define('MODE', 'debug'); // 'debug' or 'production'
+// if (!defined('ROOT'))define('ROOT', '');
+?>
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Apprndre le Sudokuy</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?<?= MODE == 'debug' ? date('dmyhs') : $version; ?>" />
 </head>
 <body>
   <div class="container">
@@ -43,21 +49,26 @@
       <div class="grid-wrapper">
         <table class="sudoku-grid" aria-label="Grille Sudoku 9×9" id="grid"></table>
       </div>
+
       <div class="card-footer toolbar">
         
       </div>
+
       <div id="status" class="status">Prêt.</div>
     </section>
 
     <aside class="card right-panel">
-      <h3 style="margin-top:0">Zone JSON</h3>
-      <div class="meta">Tu peux coller/éditer ici. Format :
+      <h3 style="margin-top:0">Explications :</h3>
+      <!-- <div class="meta">Tu peux coller/éditer ici. Format :
         <code>{"values": number[9][9], "givens": boolean[9][9], "candidates": number[][][]}</code>
       </div>
-      <textarea id="jsonArea" placeholder='{"values":[[0,0,0,...],[...]], "givens":[[false,false,...],[...]], "candidates":[[[],[],...],[...]]}'></textarea>
+      <textarea id="jsonArea" placeholder='{"values":[[0,0,0,...],[...]], "givens":[[false,false,...],[...]], "candidates":[[[],[],...],[...]]}'></textarea> -->
+      <div id="explanations" class="grid-wrapper">
+      </div>
+      
       <div class="grid-footer">
-        <button class="btn" id="importBtn">Importer depuis la zone</button>
-        <button class="btn" id="copyBtn">Copier le JSON</button>
+        <!-- <button class="btn" id="importBtn">Importer depuis la zone</button> -->
+        <!-- <button class="btn" id="copyBtn">Copier le JSON</button> -->
         
       </div>
     </aside>
@@ -75,19 +86,19 @@
     </div>
   </div>
 
-  <script src="script.js?v=1"></script>
+  <script src="script.js?<?= MODE == 'debug' ? date('dmyhs') : $version; ?>"></script>
 
   <?php
   $techDir = __DIR__ . '/techniques';
   if (is_dir($techDir)) {
       foreach (scandir($techDir) as $file) {
           if (substr($file, -3) === '.js') {
-              echo '<script src="techniques/' . htmlspecialchars($file) . '"></script>' . PHP_EOL;
+              echo '<script src="techniques/' . htmlspecialchars($file) . '?' . ((MODE == 'debug') ? date('dmyhs') : $version) . '"></script>' . PHP_EOL;
           }
       }
   }
   ?>
-  <script src="resolve.js"></script>
+  <script src="resolve.js?<?= MODE == 'debug' ? date('dmyhs') : $version; ?>"></script>
 
 
 </body>
