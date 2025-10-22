@@ -7,10 +7,19 @@
 window.SudokuTechniqueRegistry = window.SudokuTechniqueRegistry || [];
 
 // Ordre logique de résolution (hors AUTO)
-const TECH_ORDER = () =>
-    window.SudokuTechniqueRegistry
+const TECH_ORDER = () => {
+    const orderedKeys = ['nakedSingle', 'hiddenSingle', 'nakedPair', 'hiddenPair', 'nakedTriple', 'hiddenTriple', 'pointing', 'boxline', 'xwing', 'swordfish', 'xywing'];//, 'xyzwing', 'simpleColoring', 'forcingChains'];
+    const availableTechs = window.SudokuTechniqueRegistry
         .filter(t => t.key !== 'auto')
         .map(t => t.key);
+
+    // D'abord les techniques dans l'ordre spécifié
+    const ordered = orderedKeys.filter(key => availableTechs.includes(key));
+    // Puis les autres techniques éventuelles
+    const remaining = availableTechs.filter(key => !orderedKeys.includes(key));
+
+    return [...ordered, ...remaining];
+};
 
 // Historique des états pour l’undo
 let stepHistory = [];
@@ -114,11 +123,55 @@ function applyStep(step) {
 
 
 /*******************************************************
- * Gestion des événements
+// Gestion des événements
  ******************************************************/
+// Définition des niveaux de difficulté des techniques
+const TECHNIQUE_DIFFICULTY = {
+    nakedSingle: 'basic',
+    hiddenSingle: 'basic',
+    nakedPair: 'intermediate',
+    hiddenPair: 'intermediate',
+    nakedTriple: 'advanced',
+    hiddenTriple: 'advanced',
+    pointing: 'advanced',
+    boxline: 'expert',
+    xwing: 'expert',
+    swordfish: 'expert',
+    xywing: 'expert'
+};
+
+function displayExplanation(step) {
+    if (!step) return;
+
+    const explanationsDiv = document.getElementById('explanations');
+    if (!explanationsDiv) return;
+
+    // Trouver la technique utilisée
+    const tech = window.SudokuTechniqueRegistry.find(t => t.key === step.key);
+    if (!tech) return;
+
+    // Déterminer la difficulté de la technique
+    const difficulty = TECHNIQUE_DIFFICULTY[step.key] || 'basic';
+
+    // Créer l'élément d'explication
+    const explanation = document.createElement('div');
+    explanation.className = 'explanation';
+    explanation.innerHTML = `
+        <h4 class="technique-name ${difficulty}">${tech.label}</h4>
+        <p class="technique-desc">${step.explanation || 'Pas d\'explication disponible.'}</p>
+    `;
+
+    // Ajouter la nouvelle explication au début
+    explanation.style.animation = 'fadeIn 0.3s ease-out';
+    explanationsDiv.insertBefore(explanation, explanationsDiv.firstChild);
+}
+
 document.getElementById('nextStepBtn')?.addEventListener('click', () => {
+    cleanCandidates();
     clearHighlights();
     const step = findNextStep();
+    console.log('Next step found:', step);
+    displayExplanation(step);
     applyStep(step);
 });
 

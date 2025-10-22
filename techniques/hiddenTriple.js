@@ -14,7 +14,7 @@ window.SudokuTechniqueRegistry.push({
 });
 
 function findHiddenTripleInUnit(cells, unitLabel) {
-    const { values } = getState();
+    const { values, candidates } = getState();
 
     // positionsParChiffre[n] = [{r,c}, ...]
     const positionsParChiffre = Array.from({ length: 10 }, () => []);

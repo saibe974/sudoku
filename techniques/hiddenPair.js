@@ -31,33 +31,43 @@ function findHiddenPairInUnit(cells, unitLabel) {
         for (let b = a + 1; b <= 9; b++) {
             const A = positionsParChiffre[a];
             const B = positionsParChiffre[b];
-            if (A.length === 0 || B.length === 0) continue;
 
-            // Intersection des positions
+            // Pour être une paire cachée, CHAQUE chiffre doit apparaître
+            // exactement dans deux positions et ces positions doivent être les mêmes.
+            if (A.length !== 2 || B.length !== 2) continue;
+
             const keyPos = (p) => `${p.r},${p.c}`;
             const setA = new Set(A.map(keyPos));
-            const inter = B.filter(p => setA.has(keyPos(p)));
+            const setB = new Set(B.map(keyPos));
 
-            if (inter.length === 2) {
-                const keeps = inter.map(p => ({ r: p.r, c: p.c }));
-                const digits = [a, b];
+            // comparer égalité des ensembles
+            let same = true;
+            if (setA.size !== setB.size) same = false;
+            else {
+                for (const k of setA) if (!setB.has(k)) { same = false; break; }
+            }
 
-                // Kills = dans ces deux cases, tout candidat ≠ a,b
-                const kills = [];
-                for (const { r, c } of keeps) {
-                    const toRemove = (candidates[r][c] || []).filter(x => !digits.includes(x));
-                    if (toRemove.length) kills.push({ r, c, remove: toRemove });
-                }
+            if (!same) continue;
 
-                if (kills.length > 0) {
-                    return {
-                        technique: 'Hidden Pair',
-                        digits,
-                        keeps,
-                        kills,
-                        explanation: `Dans ${unitLabel}, les chiffres ${a} et ${b} n'apparaissent qu'en deux positions. Ces deux cases sont donc {${a}, ${b}} uniquement.`
-                    };
-                }
+            // Les positions communes (les deux cases)
+            const keeps = A.map(p => ({ r: p.r, c: p.c }));
+            const digits = [a, b];
+
+            // Kills = dans ces deux cases, tout candidat ≠ a,b
+            const kills = [];
+            for (const { r, c } of keeps) {
+                const toRemove = (candidates[r][c] || []).filter(x => !digits.includes(x));
+                if (toRemove.length) kills.push({ r, c, remove: toRemove });
+            }
+
+            if (kills.length > 0) {
+                return {
+                    technique: 'Hidden Pair',
+                    digits,
+                    keeps,
+                    kills,
+                    explanation: `Dans ${unitLabel}, les chiffres ${a} et ${b} n'apparaissent qu'en deux positions. Ces deux cases sont donc {${a}, ${b}} uniquement.`
+                };
             }
         }
     }
