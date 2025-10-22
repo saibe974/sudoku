@@ -8,7 +8,7 @@ window.SudokuTechniqueRegistry = window.SudokuTechniqueRegistry || [];
 
 // Ordre logique de résolution (hors AUTO)
 const TECH_ORDER = () => {
-    const orderedKeys = ['nakedSingle', 'hiddenSingle', 'nakedPair', 'hiddenPair', 'nakedTriple', 'hiddenTriple', 'pointing', 'boxline', 'xwing', 'swordfish', 'xywing'];//, 'xyzwing', 'simpleColoring', 'forcingChains'];
+    const orderedKeys = ['nakedSingle', 'hiddenSingle', 'nakedPair', 'hiddenPair', 'nakedTriple', 'hiddenTriple', 'pointing', 'boxline', 'uniqueRectangle', 'xwing', 'ywing', 'xywing', 'swordfish'];//, 'xyzwing', 'simpleColoring', 'forcingChains'];
     const availableTechs = window.SudokuTechniqueRegistry
         .filter(t => t.key !== 'auto')
         .map(t => t.key);
@@ -54,14 +54,37 @@ function populateTechniqueSelect() {
     autoOpt.textContent = 'Auto';
     select.appendChild(autoOpt);
 
-    // Puis toutes les autres techniques selon registre
-    window.SudokuTechniqueRegistry.forEach(tech => {
-        if (tech.key === 'auto') return;
+    // Icônes par niveau de difficulté (meilleur support que la couleur CSS dans <option>)
+    const DIFF_ICON = {
+        basic: '🟢',
+        intermediate: '🔵',
+        advanced: '🟠',
+        expert: '🔴'
+    };
+
+    // Puis toutes les autres techniques dans l'ordre de TECH_ORDER()
+    const order = TECH_ORDER();
+    const reg = window.SudokuTechniqueRegistry;
+
+    // Préserver la sélection actuelle si existante
+    const prev = select.getAttribute('data-selected') || select.value;
+
+    order.forEach(key => {
+        const tech = reg.find(t => t.key === key);
+        if (!tech || tech.key === 'auto') return;
+        const difficulty = TECHNIQUE_DIFFICULTY[tech.key] || 'basic';
+        const icon = DIFF_ICON[difficulty] || '';
         const opt = document.createElement('option');
         opt.value = tech.key;
-        opt.textContent = tech.label;
+        opt.textContent = `${icon} ${tech.label}`;
+        opt.dataset.difficulty = difficulty;
         select.appendChild(opt);
     });
+
+    // Restaurer la sélection précédente si possible
+    if (prev && Array.from(select.options).some(o => o.value === prev)) {
+        select.value = prev;
+    }
 }
 
 /*******************************************************
@@ -135,7 +158,9 @@ const TECHNIQUE_DIFFICULTY = {
     hiddenTriple: 'advanced',
     pointing: 'advanced',
     boxline: 'expert',
+    uniqueRectangle: 'expert',
     xwing: 'expert',
+    ywing: 'expert',
     swordfish: 'expert',
     xywing: 'expert'
 };
@@ -170,7 +195,7 @@ document.getElementById('nextStepBtn')?.addEventListener('click', () => {
     cleanCandidates();
     clearHighlights();
     const step = findNextStep();
-    console.log('Next step found:', step);
+    // console.log('Next step found:', step);
     displayExplanation(step);
     applyStep(step);
 });

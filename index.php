@@ -9,7 +9,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Apprndre le Sudokuy</title>
+  <title>Apprendre le Sudoku</title>
   <link rel="stylesheet" href="style.css?<?= MODE == 'debug' ? date('dmyhs') : $version; ?>" />
 </head>
 <body>
@@ -17,7 +17,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
     <header>
       <div>
         <h1>Seboku</h1>
-        <div class="subtitle">Apprendre...</div>
+        <div class="subtitle">Pour apprendre...</div>
       </div>
 
       <div class="toolbar">
@@ -39,6 +39,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
           <button class="btn" id="prevStepBtn">Étape précédente</button>
           <select class="btn" id="techniqueSelect" title="Choisir une technique"></select>
           <button class="btn" id="nextStepBtn" title="Appliquer un pas de résolution">Étape suivante</button>
+          <!-- <div class="meta">afficher les candidats pour résoudre</div> -->
         </div>
 
 

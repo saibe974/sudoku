@@ -705,6 +705,15 @@ function loadExample() {
     // On commence sans candidats pré-remplis
     setState(example);
     // jsonArea.value = JSON.stringify(example, null, 2);
+
+    // Vider les explications affichées
+    const explanationsDiv = document.getElementById('explanations');
+    if (explanationsDiv) explanationsDiv.innerHTML = '';
+
+    // Mettre le bouton candidats en mode 'Afficher candidats' (candidats masqués)
+    showCandidates = false;
+    updateCandidatesVisibilityButton();
+
     setStatus('Exemple chargé.', 'ok');
 }
 
