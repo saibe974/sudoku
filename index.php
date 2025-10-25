@@ -11,6 +11,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Apprendre le Sudoku</title>
   <link rel="stylesheet" href="style.css?<?= MODE == 'debug' ? date('dmyhs') : $version; ?>" />
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
   <div class="container">
@@ -21,9 +22,9 @@ define('MODE', 'debug'); // 'debug' or 'production'
       </div>
 
       <div class="toolbar">
-        <label class="btn" for="fileInput">Importer</label>
-        <button class="btn" id="downloadBtn">Télécharger</button>
-        <button class="btn" id="exampleBtn">Exemple</button>
+  <label class="btn" for="fileInput"><i data-lucide="download"></i>Importer</label>
+  <button class="btn" id="downloadBtn"><i data-lucide="upload"></i>Télécharger</button>
+  <button class="btn" id="exampleBtn"><i data-lucide="wand-2"></i>Exemple</button>
       </div>
     </header>
 
@@ -31,15 +32,35 @@ define('MODE', 'debug'); // 'debug' or 'production'
     <section class="card">
 
       <div class="card-header toolbar">
-        <div class="">
-          <button class="btn" id="toggleCandidatesBtn" title="Afficher/Masquer/Régénérer les candidats">Afficher candidats</button>
-          <button class="btn" id="clearValuesBtn" title="Efface seulement les valeurs (conserve les 'données')">Effacer valeurs</button>
-        </div>
+
+          <div>
+            <label class="btn btn-with-color" title="Activer pour marquer/retirer une case comme donnée (indice de départ)">
+              <i data-lucide="bookmark"></i>
+              <input type="checkbox" id="givenMode" />
+              Mode Données
+              <input type="color" id="givenColorPicker" value="#b7ffcf" />
+            </label>
+          </div>
+          
+          <div>
+            <button class="btn" id="toggleCandidatesBtn" title="Afficher/Masquer/Régénérer les candidats"><i data-lucide="grid-3x3"></i>Afficher candidats</button>
+          </div>
+
+          <div>
+            <button class="btn" id="clearAllBtn" title="Tout remettre à zéro"><i data-lucide="file-plus"></i>Nouvelle grille</button>
+            <button class="btn btn-with-color" id="clearValuesBtn" title="Efface seulement les valeurs (conserve les 'données')">
+              <i data-lucide="eraser"></i>Effacer valeurs
+              <input type="color" id="valueColorPicker" value="#e5e7eb" />
+            </button>
+            <button class="btn" id="toggleValuesBtn" title="Afficher ou masquer toutes les valeurs"><i data-lucide="eye-off"></i>Masquer valeurs</button>
+          </div>
+          
+
         <div>
-          <button class="btn" id="prevStepBtn">Étape précédente</button>
+          <button class="btn" id="prevStepBtn"><i data-lucide="chevron-left"></i>précédent</button>
           <select class="btn" id="techniqueSelect" title="Choisir une technique"></select>
-          <button class="btn" id="nextStepBtn" title="Appliquer un pas de résolution">Étape suivante</button>
-          <!-- <div class="meta">afficher les candidats pour résoudre</div> -->
+            <button class="btn" id="hintBtn" title="Proposer la prochaine technique (sans appliquer)"><i data-lucide="lightbulb"></i>Indice</button>
+            <button class="btn" id="nextStepBtn" title="Appliquer un pas de résolution">suivant<i data-lucide="chevron-right" style="margin-left:6px"></i></button>
         </div>
 
 
@@ -55,7 +76,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
         
       </div>
 
-      <div id="status" class="status">Prêt.</div>
+      
     </section>
 
     <aside class="card right-panel">
@@ -74,6 +95,8 @@ define('MODE', 'debug'); // 'debug' or 'production'
       </div>
     </aside>
   </div>
+
+  <div id="status" class="status">Prêt.</div>
 
   <!-- Popover candidats -->
   <div id="candPopover" class="cand-popover" aria-hidden="true">

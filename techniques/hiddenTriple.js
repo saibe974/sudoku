@@ -10,7 +10,8 @@ window.SudokuTechniqueRegistry.push({
     key: 'hiddenTriple',
     label: 'Hidden Triple',
     finder: findHiddenTripleStep,
-    applier: applyHiddenTripleStep
+    applier: applyHiddenTripleStep,
+    video: 'https://youtube.com/shorts/96cQyoohlfw?si=iQa7-fgd3W1-iUGl'
 });
 
 function findHiddenTripleInUnit(cells, unitLabel) {

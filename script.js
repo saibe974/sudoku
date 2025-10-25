@@ -1,6 +1,7 @@
 const gridEl = document.getElementById('grid');
 const givenModeEl = document.getElementById('givenMode');
 const statusEl = document.getElementById('status');
+let statusHideTimer = null;
 
 // const jsonArea = document.getElementById('jsonArea');
 // const importBtn = document.getElementById('importBtn');
@@ -11,12 +12,24 @@ const fileInput = document.getElementById('fileInput');
 const clearValuesBtn = document.getElementById('clearValuesBtn');
 const clearAllBtn = document.getElementById('clearAllBtn'); // a modifier en toogle
 const toggleCandidatesBtn = document.getElementById('toggleCandidatesBtn');
+const toggleValuesBtn = document.getElementById('toggleValuesBtn');
+const valueColorPicker = document.getElementById('valueColorPicker');
+const givenColorPicker = document.getElementById('givenColorPicker');
 
 const candPopover = document.getElementById('candPopover');
+
+// Clés localStorage
+const LS_KEYS = {
+    valueColor: 'seboku:valueColor',
+    givenColor: 'seboku:givenColor',
+    lastState: 'seboku:lastState',
+    downloadName: 'seboku:downloadName',
+};
 
 const SIZE = 9;
 
 let showCandidates = true;
+let showValues = true;
 let candidates = Array.from({ length: SIZE }, () =>
     Array.from({ length: SIZE }, () => [])
 );
@@ -73,15 +86,25 @@ function buildGrid() {
                 if (input.value) candidates[r][c] = [];
                 updateConflicts();
                 renderCell(r, c);
+                saveStateToLocal();
             });
 
             // clic gauche sur la cellule
             td.addEventListener('click', (evt) => {
                 // Si Mode Données activé, on toggle la classe 'given'
+
                 if (givenModeEl && givenModeEl.checked) {
                     td.classList.toggle('given');
-                    return;
+                    // empêcher l'édition si donnée
+                    // input.readOnly = td.classList.contains('given');
+                    // saveStateToLocal();
+                    // return;
+                } else if (givenModeEl && !givenModeEl.checked && td.classList.contains('given')) {
+                    return
                 }
+
+                // En dehors du mode données, ne pas permettre l'édition d'une case donnée
+                // if (td.classList.contains('given')) return;
 
                 // Sinon, on ouvre le popover de valeur à gauche de la cellule
                 evt.preventDefault();
@@ -91,6 +114,8 @@ function buildGrid() {
             // clic droit → popover candidats
             td.addEventListener('contextmenu', (evt) => {
                 evt.preventDefault();
+                // Bloquer sur une case donnée
+                if (td.classList.contains('given')) return;
                 showCandidates = true; // si masqués, on force l’affichage pour éditer
                 updateCandidatesVisibilityButton();
                 const rect = td.getBoundingClientRect();
@@ -182,6 +207,8 @@ function setState(state) {
             const v = Number(values[r][c] || 0);
             input.value = (v >= 1 && v <= 9) ? String(v) : '';
             td.classList.toggle('given', !!givens[r][c]);
+            // empêcher l'édition des données
+            input.readOnly = !!givens[r][c];
         }
     }
 
@@ -206,6 +233,9 @@ function setState(state) {
 
     updateConflicts();
     renderAllCells();
+
+    // Sauvegarder l'état courant en localStorage
+    saveStateToLocal();
 }
 
 function updateConflicts() {
@@ -282,29 +312,56 @@ function isValidCandidate(r, c, n) {
     return true;
 }
 
-
-function setStatus(msg, type = '') {
-    statusEl.textContent = msg;
-    statusEl.className = 'status ' + (type || '');
+// ====== Persistence (LocalStorage) ======
+function saveStateToLocal() {
+    try {
+        const data = JSON.stringify(getState());
+        localStorage.setItem(LS_KEYS.lastState, data);
+    } catch (e) {
+        // Ignorer les erreurs (quota, privacy, etc.)
+    }
 }
 
-// Export/Import
-// function exportToTextarea() {
-//     const state = getState();
-//     jsonArea.value = JSON.stringify(state, null, 2);
-//     setStatus('Exporté vers la zone JSON.', 'ok');
-// }
+function tryLoadStateFromLocal() {
+    try {
+        const raw = localStorage.getItem(LS_KEYS.lastState);
+        if (!raw) return false;
+        const obj = JSON.parse(raw);
+        validateState(obj);
+        setState(obj);
+        setStatus('Grille restaurée depuis la sauvegarde locale.', 'ok');
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
 
-// function importFromTextarea() {
-//     try {
-//         const obj = JSON.parse(jsonArea.value);
-//         validateState(obj);
-//         setState(obj);
-//         setStatus('Import réussi depuis la zone JSON.', 'ok');
-//     } catch (e) {
-//         setStatus('Erreur d\'import : ' + e.message, 'err');
-//     }
-// }
+
+function setStatus(msg, type = '') {
+    if (!statusEl) return;
+    // Mettre le message et classes
+    statusEl.textContent = msg;
+    statusEl.className = 'status ' + (type || '');
+
+    // Afficher en toast (top centré) avec auto-hide
+    // Nettoyer un hide précédent
+    if (statusHideTimer) {
+        clearTimeout(statusHideTimer);
+        statusHideTimer = null;
+    }
+
+    // Forcer le reflow pour relancer l'anim si même message
+    // eslint-disable-next-line no-unused-expressions
+    statusEl.offsetHeight;
+    statusEl.classList.add('show');
+
+    // Durée d'affichage selon le type
+    const duration = type === 'err' ? 4000 : type === 'warn' ? 3500 : 2500;
+    statusHideTimer = setTimeout(() => {
+        statusEl.classList.remove('show');
+        statusHideTimer = null;
+    }, duration);
+}
 
 function validateState(obj) {
     if (!obj || typeof obj !== 'object') throw new Error('Objet JSON invalide.');
@@ -415,16 +472,38 @@ window.sanitizeCandidates = function sanitizeCandidates() {
 
 function downloadJSON() {
     const state = getState();
+
+    // Proposer un nom de fichier à l'utilisateur (prérempli avec le dernier utilisé)
+    let suggested = 'sudoku.json';
+    try {
+        const saved = localStorage.getItem(LS_KEYS.downloadName);
+        if (saved) suggested = saved;
+    } catch (e) { /* ignore */ }
+
+    let name = prompt('Nom du fichier à télécharger (.json) :', suggested);
+    if (name === null) {
+        setStatus('Téléchargement annulé.', 'warn');
+        return;
+    }
+    name = (name || '').trim();
+    if (!name) name = suggested;
+    // Sanitize caractères invalides et garantir l'extension .json
+    name = name.replace(/[\\/:*?"<>|]+/g, '_');
+    if (!/\.json$/i.test(name)) name += '.json';
+
+    // Mémoriser le dernier nom choisi
+    try { localStorage.setItem(LS_KEYS.downloadName, name); } catch (e) { /* ignore */ }
+
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'sudoku.json';
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    setStatus('Fichier sudoku.json téléchargé.', 'ok');
+    setStatus(`Fichier ${name} téléchargé.`, 'ok');
 }
 
 function importFromFile(file) {
@@ -444,6 +523,8 @@ function importFromFile(file) {
             // Mettre le bouton candidats en mode 'Afficher candidats' (candidats masqués)
             showCandidates = false;
             updateCandidatesVisibilityButton();
+
+            clearHighlights();
 
             setStatus('Import depuis fichier réussi.', 'ok');
         } catch (e) {
@@ -465,6 +546,7 @@ function clearValues() {
     updateConflicts();
     renderAllCells();
     setStatus('Valeurs non « données » effacées.', 'ok');
+    saveStateToLocal();
 }
 
 function clearAll() {
@@ -474,13 +556,20 @@ function clearAll() {
             const input = td.querySelector('input');
             input.value = '';
             td.classList.remove('given');
+            input.readOnly = false;
             candidates[r][c] = [];
         }
     }
-    jsonArea.value = '';
+    try { if (typeof jsonArea !== 'undefined' && jsonArea) jsonArea.value = ''; } catch (e) { }
+    // Vider les explications affichées
+    try {
+        const explanationsDiv = document.getElementById('explanations');
+        if (explanationsDiv) explanationsDiv.innerHTML = '';
+    } catch (e) { }
     updateConflicts();
     renderAllCells();
     setStatus('Grille réinitialisée.', 'ok');
+    saveStateToLocal();
 }
 
 /* ====== POPUP CANDIDATS ====== */
@@ -499,6 +588,7 @@ function buildPopover() {
             // mettre à jour le style actif
             btn.classList.toggle('active', candidates[popoverTarget.r][popoverTarget.c].includes(n));
             renderCell(popoverTarget.r, popoverTarget.c);
+            saveStateToLocal();
         });
         grid.appendChild(btn);
     }
@@ -508,12 +598,14 @@ function buildPopover() {
         candidates[popoverTarget.r][popoverTarget.c] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
         syncPopoverButtons();
         renderCell(popoverTarget.r, popoverTarget.c);
+        saveStateToLocal();
     });
     candPopover.querySelector('[data-action="none"]').addEventListener('click', () => {
         if (popoverTarget.r == null) return;
         candidates[popoverTarget.r][popoverTarget.c] = [];
         syncPopoverButtons();
         renderCell(popoverTarget.r, popoverTarget.c);
+        saveStateToLocal();
     });
     candPopover.querySelector('[data-action="ok"]').addEventListener('click', hidePopover);
 
@@ -562,6 +654,7 @@ function buildValuePopover() {
             updateConflicts();
             hideValuePopover();
             setStatus('Valeur placée : ' + n, 'ok');
+            saveStateToLocal();
         });
         wrap.appendChild(btn);
     }
@@ -582,6 +675,7 @@ function buildValuePopover() {
         updateConflicts();
         hideValuePopover();
         setStatus('Valeur effacée.', 'ok');
+        saveStateToLocal();
     });
 
     el.appendChild(wrap);
@@ -657,6 +751,7 @@ function toggleCandidate(r, c, n) {
     if (idx === -1) arr.push(n);
     else arr.splice(idx, 1);
     arr.sort((a, b) => a - b);
+    saveStateToLocal();
 }
 
 function syncPopoverButtons() {
@@ -683,6 +778,14 @@ function updateCandidatesVisibilityButton() {
         toggleCandidatesBtn.textContent = 'Masquer candidats';
     }
     renderAllCells();
+}
+
+/* ====== AFFICHAGE VALEURS ====== */
+function updateValuesVisibilityButton() {
+    if (!toggleValuesBtn) return;
+    // Applique la classe sur la grille pour masquer les chiffres
+    gridEl.classList.toggle('hide-values', !showValues);
+    toggleValuesBtn.textContent = showValues ? 'Masquer valeurs' : 'Afficher valeurs';
 }
 
 /* ====== EXEMPLE ====== */
@@ -733,6 +836,7 @@ function fillAutoCandidates() {
     }
     renderAllCells();
     setStatus('Candidats auto remplis.', 'ok');
+    saveStateToLocal();
 }
 
 
@@ -748,6 +852,9 @@ fileInput.addEventListener('change', e => {
 });
 
 clearValuesBtn.addEventListener('click', clearValues);
+
+// Nouvelle grille (réinitialiser totalement)
+clearAllBtn?.addEventListener('click', clearAll);
 
 toggleCandidatesBtn.addEventListener('click', () => {
     const hasAnyCandidates = candidates.some(row => row.some(cell => cell.length > 0));
@@ -768,6 +875,33 @@ toggleCandidatesBtn.addEventListener('click', () => {
     }
 
     updateCandidatesVisibilityButton();
+});
+
+// Toggle affichage des valeurs
+toggleValuesBtn?.addEventListener('click', () => {
+    showValues = !showValues;
+    updateValuesVisibilityButton();
+});
+
+// Couleurs personnalisables (valeurs et données)
+function applyValueColor(hex) {
+    if (!hex) return;
+    document.documentElement.style.setProperty('--valueText', hex);
+}
+function applyGivenColor(hex) {
+    if (!hex) return;
+    document.documentElement.style.setProperty('--givenText', hex);
+}
+
+valueColorPicker?.addEventListener('input', (e) => {
+    const hex = e.target.value;
+    applyValueColor(hex);
+    try { localStorage.setItem(LS_KEYS.valueColor, hex); } catch (e) { }
+});
+givenColorPicker?.addEventListener('input', (e) => {
+    const hex = e.target.value;
+    applyGivenColor(hex);
+    try { localStorage.setItem(LS_KEYS.givenColor, hex); } catch (e) { }
 });
 
 
@@ -894,5 +1028,40 @@ document.getElementById('clearHighlightsBtn')?.addEventListener('click', () => {
 buildGrid();
 buildPopover();
 updateCandidatesVisibilityButton();
+updateValuesVisibilityButton();
+
+// Couleurs: charger depuis localStorage si disponibles, sinon depuis les pickers
+try {
+    const savedValueColor = localStorage.getItem(LS_KEYS.valueColor);
+    if (savedValueColor) {
+        if (valueColorPicker) valueColorPicker.value = savedValueColor;
+        applyValueColor(savedValueColor);
+    } else if (valueColorPicker) {
+        applyValueColor(valueColorPicker.value);
+    }
+    const savedGivenColor = localStorage.getItem(LS_KEYS.givenColor);
+    if (savedGivenColor) {
+        if (givenColorPicker) givenColorPicker.value = savedGivenColor;
+        applyGivenColor(savedGivenColor);
+    } else if (givenColorPicker) {
+        applyGivenColor(givenColorPicker.value);
+    }
+} catch (e) {
+    if (valueColorPicker) applyValueColor(valueColorPicker.value);
+    if (givenColorPicker) applyGivenColor(givenColorPicker.value);
+}
+
+// Charger la dernière grille si présente en localStorage
+tryLoadStateFromLocal();
+
 setStatus('Prêt — clic droit sur une case pour éditer les candidats. Active « Mode Données » pour marquer les cases données.');
 renderAllCells();
+
+// Initialiser les icônes Lucide si disponible
+try {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+} catch (e) {
+    // silencieux si Lucide non chargé
+}

@@ -125,11 +125,22 @@ h1 {
     border: none;
     outline: none;
     background: transparent;
-    color: var(--text);
+    color: var(--valueText, var(--text));
     font-weight: 700;
     font-size: 22px;
     text-align: center;
     caret-color: var(--accent);
+}
+
+/* Masquer visuellement les valeurs non-données (garder visibles les "données") */
+.sudoku-grid.hide-values td:not(.given) .cell-input {
+    color: transparent !important;
+    text-shadow: none !important;
+}
+
+/* Quand les valeurs sont masquées, atténuer davantage les données */
+.sudoku-grid.hide-values td.given .cell-input {
+    opacity: 0.45;
 }
 
 .cell-input::placeholder {
@@ -147,7 +158,9 @@ h1 {
 }
 
 .given .cell-input {
-    color: #b7ffcf;
+    color: var(--givenText, #b7ffcf);
+    opacity: 0.7;
+    /* données plus transparentes */
 }
 
 .cell-error {
@@ -171,6 +184,21 @@ h1 {
     font-size: 14px;
     cursor: pointer;
     transition: transform .05s ease, background .2s ease, border-color .2s ease;
+}
+
+.btn-with-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Icônes Lucide dans les boutons et toggles */
+.btn svg,
+.toggle svg {
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    vertical-align: -2px;
 }
 
 .btn:hover {
@@ -213,6 +241,46 @@ h1 {
     height: 18px;
 }
 
+/* Rendre les inputs couleur comme de simples pastilles rondes */
+.toolbar input[type="color"],
+input[type="color"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+/* WebKit */
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+    border-radius: 50%;
+}
+
+input[type="color"]::-webkit-color-swatch {
+    border: 2px solid #27354d;
+    border-radius: 50%;
+}
+
+/* Firefox */
+input[type="color"]::-moz-color-swatch {
+    border: 2px solid #27354d;
+    border-radius: 50%;
+}
+
+/* Focus ring discret sur fond sombre */
+input[type="color"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, .35);
+    border-radius: 50%;
+}
+
 .right-panel textarea {
     width: 100%;
     min-height: 240px;
@@ -231,17 +299,39 @@ h1 {
 }
 
 .status {
-    margin-top: 10px;
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    z-index: 2000;
+    background: #0b1220;
+    border: 1px solid #27354d;
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-weight: 600;
     font-size: 14px;
-    color: var(--muted);
+    box-shadow: var(--shadow);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease, border-color .2s ease;
+}
+
+.status.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
 }
 
 .status.ok {
-    color: var(--ok);
+    border-color: color-mix(in srgb, var(--ok) 60%, #27354d);
+}
+
+.status.warn {
+    border-color: color-mix(in srgb, var(--warn) 60%, #27354d);
 }
 
 .status.err {
-    color: var(--err);
+    border-color: color-mix(in srgb, var(--err) 60%, #27354d);
 }
 
 .grid-footer {
@@ -290,7 +380,7 @@ h1 {
     top: 0;
     left: 0;
     transform: translate(-9999px, -9999px);
-    background: #0b1220;
+    background: #0b122080;
     border: 1px solid #27354d;
     border-radius: 12px;
     padding: 10px;
@@ -312,7 +402,7 @@ h1 {
 
 .cand-btn {
     border: 1px solid #27354d;
-    background: #0f172a;
+    background: #0f172a4d;
     color: var(--text);
     border-radius: 10px;
     padding: 8px 0;
@@ -454,4 +544,27 @@ h1 {
     margin: 0;
     font-size: 14px;
     line-height: 1.5;
+}
+
+/* Vidéo dans les explications/hints */
+.explanation-video {
+    margin-top: 10px;
+}
+
+.video-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border: 1px solid var(--grid-2);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.video-container iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
 }
