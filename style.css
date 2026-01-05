@@ -1,34 +1,25 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
 :root {
     --bg: #0f172a;
-    /* slate-900 */
     --panel: #111827;
-    /* gray-900 */
     --panel-2: #0b1220;
-    /* custom */
     --text: #e5e7eb;
-    /* gray-200 */
     --muted: #9ca3af;
-    /* gray-400 */
     --accent: #60a5fa;
-    /* blue-400 */
     --accent-2: #a78bfa;
-    /* violet-400 */
     --ok: #22c55e;
-    /* green-500 */
     --warn: #f59e0b;
-    /* amber-500 */
     --err: #ef4444;
-    /* red-500 */
     --grid: #1f2937;
-    /* gray-800 */
     --grid-2: #374151;
-    /* gray-700 */
     --cell: #0b1220;
-    /* custom */
     --cell-focus: #0f1e3a;
-    /* custom */
     --given: #0a3a24;
-    /* custom */
     --shadow: 0 10px 30px rgba(0, 0, 0, .35);
     --radius: 16px;
 }
@@ -38,12 +29,17 @@ body {
     height: 100%;
     background: radial-gradient(1200px 800px at 20% 0%, #0b1220 0%, #0f172a 35%, #0a0f1e 100%);
     color: var(--text);
-    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
     margin: 0;
 }
 
+body {
+    display: block;
+    padding: 0;
+}
+
 .container {
-    max-width: 1100px;
+    max-width: 1400px;
     margin: 24px auto 80px;
     padding: 0 16px;
     display: grid;
@@ -64,6 +60,12 @@ h1 {
     letter-spacing: .3px;
     margin: 0;
     font-weight: 700;
+    text-align: left;
+    color: var(--text);
+}
+
+h3 {
+    color: var(--text);
 }
 
 .subtitle {
@@ -77,6 +79,14 @@ h1 {
     border-radius: var(--radius);
     box-shadow: var(--shadow);
     padding: 16px;
+}
+
+.card-header {
+    margin-bottom: 16px;
+}
+
+.card-footer {
+    margin-top: 12px;
 }
 
 .grid-wrapper {
@@ -102,7 +112,6 @@ h1 {
     background: var(--cell);
 }
 
-/* Bordures épaisses pour les blocs 3x3 */
 .sudoku-grid tr:nth-child(3n) td {
     border-bottom: 3px solid var(--grid-2);
 }
@@ -125,22 +134,11 @@ h1 {
     border: none;
     outline: none;
     background: transparent;
-    color: var(--valueText, var(--text));
+    color: var(--text);
     font-weight: 700;
     font-size: 22px;
     text-align: center;
     caret-color: var(--accent);
-}
-
-/* Masquer visuellement les valeurs non-données (garder visibles les "données") */
-.sudoku-grid.hide-values td:not(.given) .cell-input {
-    color: transparent !important;
-    text-shadow: none !important;
-}
-
-/* Quand les valeurs sont masquées, atténuer davantage les données */
-.sudoku-grid.hide-values td.given .cell-input {
-    opacity: 0.45;
 }
 
 .cell-input::placeholder {
@@ -158,9 +156,7 @@ h1 {
 }
 
 .given .cell-input {
-    color: var(--givenText, #b7ffcf);
-    opacity: 0.7;
-    /* données plus transparentes */
+    color: #b7ffcf;
 }
 
 .cell-error {
@@ -174,7 +170,8 @@ h1 {
     align-items: center;
 }
 
-.btn {
+.btn,
+button {
     background: #0b1220;
     border: 1px solid #27354d;
     color: var(--text);
@@ -184,29 +181,19 @@ h1 {
     font-size: 14px;
     cursor: pointer;
     transition: transform .05s ease, background .2s ease, border-color .2s ease;
-}
-
-.btn-with-color {
     display: inline-flex;
     align-items: center;
     gap: 6px;
 }
 
-/* Icônes Lucide dans les boutons et toggles */
-.btn svg,
-.toggle svg {
-    width: 16px;
-    height: 16px;
-    margin-right: 6px;
-    vertical-align: -2px;
-}
-
-.btn:hover {
+.btn:hover,
+button:hover {
     background: #0e182d;
     border-color: #35507e;
 }
 
-.btn:active {
+.btn:active,
+button:active {
     transform: translateY(1px);
 }
 
@@ -218,67 +205,37 @@ h1 {
 .btn.xs {
     padding: 6px 10px;
     font-size: 12px;
-    border-radius: 10px;
 }
 
-.toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border: 1px solid #27354d;
-    border-radius: 999px;
-    background: #0b1220;
+.btn-with-color {
+    position: relative;
+}
+
+.btn-with-color input[type="color"] {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 4px;
     cursor: pointer;
-    font-weight: 600;
-    font-size: 14px;
-    color: var(--text);
 }
 
-.toggle input {
+label.btn {
+    margin: 0;
+}
+
+label.btn input[type="checkbox"] {
     accent-color: var(--accent);
     width: 18px;
     height: 18px;
 }
 
-/* Rendre les inputs couleur comme de simples pastilles rondes */
-.toolbar input[type="color"],
-input[type="color"] {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: none;
-    border-radius: 50%;
-    background: none;
-    cursor: pointer;
-    vertical-align: middle;
-}
-
-/* WebKit */
-input[type="color"]::-webkit-color-swatch-wrapper {
-    padding: 0;
-    border-radius: 50%;
-}
-
-input[type="color"]::-webkit-color-swatch {
-    border: 2px solid #27354d;
-    border-radius: 50%;
-}
-
-/* Firefox */
-input[type="color"]::-moz-color-swatch {
-    border: 2px solid #27354d;
-    border-radius: 50%;
-}
-
-/* Focus ring discret sur fond sombre */
-input[type="color"]:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(96, 165, 250, .35);
-    border-radius: 50%;
+.right-panel {
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
 }
 
 .right-panel textarea {
@@ -290,48 +247,35 @@ input[type="color"]:focus-visible {
     background: #0b1220;
     color: var(--text);
     padding: 12px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: ui-monospace, monospace;
 }
 
 .meta {
     color: var(--muted);
     font-size: 12px;
+    margin-bottom: 8px;
 }
 
 .status {
     position: fixed;
-    top: 16px;
+    bottom: 20px;
     left: 50%;
-    transform: translateX(-50%) translateY(-10px);
-    z-index: 2000;
-    background: #0b1220;
-    border: 1px solid #27354d;
-    color: var(--text);
-    padding: 10px 14px;
-    border-radius: 12px;
-    font-weight: 600;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    background: var(--panel);
+    border: 1px solid var(--grid-2);
+    border-radius: 8px;
     font-size: 14px;
+    color: var(--muted);
     box-shadow: var(--shadow);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .2s ease, transform .2s ease, border-color .2s ease;
-}
-
-.status.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
 }
 
 .status.ok {
-    border-color: color-mix(in srgb, var(--ok) 60%, #27354d);
-}
-
-.status.warn {
-    border-color: color-mix(in srgb, var(--warn) 60%, #27354d);
+    color: var(--ok);
 }
 
 .status.err {
-    border-color: color-mix(in srgb, var(--err) 60%, #27354d);
+    color: var(--err);
 }
 
 .grid-footer {
@@ -341,230 +285,233 @@ input[type="color"]:focus-visible {
     flex-wrap: wrap;
 }
 
-@media (max-width: 980px) {
-    .container {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* === CANDIDATS (petits chiffres 3×3 dans chaque case) === */
-.cell-candidates {
-    position: absolute;
-    inset: 2px;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-    gap: 1px;
-    pointer-events: none;
-    /* pas cliquable, l’input garde le focus */
-}
-
-.cell-candidates .cand {
-    font-size: 9px;
-    line-height: 1;
-    color: #9fb3d1;
-    opacity: .9;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    user-select: none;
-}
-
-.cell-candidates.hidden {
+input[type="file"] {
     display: none;
 }
 
-/* === Popover candidats === */
+select.btn {
+    padding-right: 30px;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e5e7eb' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+}
+
 .cand-popover {
     position: fixed;
-    top: 0;
-    left: 0;
-    transform: translate(-9999px, -9999px);
-    background: #0b122080;
-    border: 1px solid #27354d;
+    background: var(--panel);
+    border: 1px solid var(--grid-2);
     border-radius: 12px;
-    padding: 10px;
+    padding: 12px;
     box-shadow: var(--shadow);
     z-index: 1000;
-    width: 174px;
+    display: none;
 }
 
-.cand-popover[aria-hidden="true"] {
-    display: none;
+.cand-popover[aria-hidden="false"] {
+    display: block;
 }
 
 .cand-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 6px;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
 }
 
-.cand-btn {
-    border: 1px solid #27354d;
-    background: #0f172a4d;
-    color: var(--text);
-    border-radius: 10px;
-    padding: 8px 0;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background .15s ease, border-color .15s ease;
-}
-
-.cand-btn.active {
-    background: #102446;
-    border-color: #3c5f9b;
-}
-
-.cand-btn:hover {
-    background: #0e182d;
-    border-color: #35507e;
+.cand-grid button {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 16px;
 }
 
 .cand-actions {
     display: flex;
-    justify-content: space-between;
     gap: 6px;
+    justify-content: space-between;
 }
 
-.cand.invalid {
-    color: #ef4444;
-    /* rouge */
-}
-
-/* Surlignages cellules */
-.cell-highlight {
-    outline: 2px solid rgba(96, 165, 250, .45);
-}
-
-/* bleu clair */
-.cell-highlight-strong {
-    box-shadow: inset 0 0 0 3px #60a5fa;
-}
-
-/* bleu fort */
-.col-highlight {
-    outline: 2px solid rgba(34, 197, 94, .35);
-}
-
-/* vert clair */
-
-/* Marquage des candidats */
-.cand.keep {
-    color: #22c55e;
-    font-weight: 700;
-}
-
-/* vert */
-.cand.kill {
-    color: #ef4444;
-    text-decoration: line-through;
-}
-
-/* rouge barré */
-
-/* === Explications === */
-#explanations {
-    max-height: 400px;
-    overflow-y: auto;
-    padding: 16px;
-    display: block;
-    /* Remplace grid layout */
-    scrollbar-width: thin;
-    /* Firefox */
-    scrollbar-color: var(--grid-2) var(--cell);
-    /* Firefox */
-}
-
-/* Style pour les scrollbars Webkit (Chrome, Safari, Edge) */
-#explanations::-webkit-scrollbar {
-    width: 8px;
-}
-
-#explanations::-webkit-scrollbar-track {
-    background: var(--cell);
-}
-
-#explanations::-webkit-scrollbar-thumb {
-    background-color: var(--grid-2);
-    border-radius: 4px;
-}
-
-.explanation {
-    background: var(--cell);
-    border: 1px solid var(--grid-2);
-    border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 12px;
-    width: calc(100% - 8px);
-    /* Compte pour la scrollbar */
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
+/* Responsive design */
+@media (max-width: 1200px) {
+    .container {
+        max-width: 100%;
+        grid-template-columns: 1fr 380px;
     }
 }
 
-.technique-name {
-    color: var(--accent);
-    margin: 0 0 8px;
-    font-size: 16px;
+@media (max-width: 980px) {
+    .container {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+        margin: 16px auto 40px;
+    }
+
+    .right-panel {
+        max-height: none;
+    }
 }
 
-/* Couleurs des techniques par difficulté */
-.technique-name.basic {
-    color: var(--ok);
-    /* Vert pour les techniques de base */
+@media (max-width: 768px) {
+    .container {
+        padding: 0 12px;
+        gap: 16px;
+        margin: 12px auto 30px;
+    }
+
+    h1 {
+        font-size: 20px;
+    }
+
+    .subtitle {
+        font-size: 12px;
+    }
+
+    header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .toolbar {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .card {
+        padding: 12px;
+    }
+
+    .sudoku-grid td {
+        width: 38px;
+        height: 38px;
+    }
+
+    .cell-input {
+        font-size: 18px;
+    }
+
+    .btn,
+    button {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+
+    .btn.xs {
+        padding: 5px 8px;
+        font-size: 11px;
+    }
+
+    .right-panel textarea {
+        min-height: 200px;
+        font-size: 13px;
+    }
+
+    .grid-footer {
+        flex-direction: column;
+    }
+
+    .grid-footer .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .status {
+        bottom: 10px;
+        left: 10px;
+        right: 10px;
+        transform: none;
+        font-size: 12px;
+    }
 }
 
-.technique-name.intermediate {
-    color: var(--accent);
-    /* Bleu pour les techniques intermédiaires */
+@media (max-width: 480px) {
+    .container {
+        padding: 0 8px;
+        margin: 8px auto 20px;
+    }
+
+    h1 {
+        font-size: 18px;
+    }
+
+    .subtitle {
+        font-size: 11px;
+    }
+
+    .card {
+        padding: 8px;
+        border-radius: 12px;
+    }
+
+    .grid-wrapper {
+        padding: 8px;
+    }
+
+    .sudoku-grid td {
+        width: 32px;
+        height: 32px;
+    }
+
+    .cell-input {
+        font-size: 16px;
+    }
+
+    .btn,
+    button {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+
+    .btn.xs {
+        padding: 4px 6px;
+        font-size: 10px;
+    }
+
+    .toolbar {
+        gap: 6px;
+    }
+
+    .right-panel textarea {
+        min-height: 180px;
+        font-size: 12px;
+        padding: 10px;
+    }
+
+    .right-panel h3 {
+        font-size: 16px;
+    }
+
+    .meta {
+        font-size: 11px;
+    }
+
+    .status {
+        font-size: 11px;
+        padding: 8px 12px;
+    }
+
+    .btn-with-color input[type="color"] {
+        width: 20px;
+        height: 20px;
+    }
 }
 
-.technique-name.advanced {
-    color: var(--warn);
-    /* Orange pour les techniques avancées */
-}
+/* Très petits écrans (< 360px) */
+@media (max-width: 360px) {
+    .sudoku-grid td {
+        width: 28px;
+        height: 28px;
+    }
 
-.technique-name.expert {
-    color: var(--err);
-    /* Rouge pour les techniques expertes */
-}
+    .cell-input {
+        font-size: 14px;
+    }
 
-.technique-desc {
-    color: var(--text);
-    margin: 0;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-/* Vidéo dans les explications/hints */
-.explanation-video {
-    margin-top: 10px;
-}
-
-.video-container {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #000;
-    border: 1px solid var(--grid-2);
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.video-container iframe {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
+    .btn,
+    button {
+        font-size: 11px;
+        padding: 6px 8px;
+    }
 }
