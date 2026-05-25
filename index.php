@@ -78,6 +78,17 @@ define('MODE', 'debug'); // 'debug' or 'production'
 
       <div class="grid-wrapper">
         <table class="sudoku-grid" aria-label="Grille Sudoku 9×9" id="grid"></table>
+        <div class="mobile-grid-digits" id="mobileGridDigits" aria-label="Saisie rapide mobile">
+          <button class="btn mobile-digit-btn" type="button" data-digit="1">1</button>
+          <button class="btn mobile-digit-btn" type="button" data-digit="2">2</button>
+          <button class="btn mobile-digit-btn" type="button" data-digit="3">3</button>
+          <button class="btn mobile-digit-btn" type="button" data-digit="4">4</button>
+          <button class="btn mobile-digit-btn" type="button" data-digit="5">5</button>
+          <button class="btn mobile-digit-btn" type="button" data-digit="6">6</button>
+          <button class="btn mobile-digit-btn" type="button" data-digit="7">7</button>
+          <button class="btn mobile-digit-btn" type="button" data-digit="8">8</button>
+          <button class="btn mobile-digit-btn" type="button" data-digit="9">9</button>
+        </div>
         <div class="grid-play-menu" id="gridPlayMenu" hidden>
           <button class="btn grid-play-btn" id="gridMenuValuesBtn" type="button"><i data-lucide="eye-off"></i>Valeurs</button>
           <button class="btn grid-play-btn" id="gridMenuCandidatesBtn" type="button"><i data-lucide="grid-3x3"></i>Candidats</button>

@@ -310,8 +310,10 @@
         const oldCandDiv = td.querySelector('.cell-candidates');
         if (oldCandDiv) oldCandDiv.remove();
 
-        // Afficher/masquer l'input selon valuesVisible
-        input.style.display = valuesVisible ? '' : 'none';
+        // Masquer uniquement les valeurs saisies par le joueur.
+        // Les 'givens' (indices initiaux) restent visibles.
+        const isGiven = td.classList.contains('given');
+        input.style.display = (valuesVisible || isGiven) ? '' : 'none';
 
         // Afficher les candidats si le mode est actif et qu'il n'y a pas de valeur
         if (candidatesVisible && !hasValue && cands.length > 0) {

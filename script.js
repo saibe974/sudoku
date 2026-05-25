@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const clearAllBtn = document.getElementById('clearAllBtn');
     const clearValuesBtn = document.getElementById('clearValuesBtn');
     const gridPlayMenuEl = document.getElementById('gridPlayMenu');
+    const mobileGridDigitsEl = document.getElementById('mobileGridDigits');
     const gridMenuValuesBtn = document.getElementById('gridMenuValuesBtn');
     const gridMenuCandidatesBtn = document.getElementById('gridMenuCandidatesBtn');
     const gridMenuHintBtn = document.getElementById('gridMenuHintBtn');
@@ -60,6 +61,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let dragCornerIndex = -1;
     let hasManualCornerEdits = false;
     let usingFallbackCorners = false;
+    let selectedGridCellEl = null;
     let photoImportInProgress = false;
     let statusHideTimer = null;
 
@@ -122,6 +124,49 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function isMobileViewport() {
+        return window.innerWidth <= MOBILE_BREAKPOINT;
+    }
+
+    function setSelectedGridCell(td) {
+        if (selectedGridCellEl && selectedGridCellEl !== td) {
+            selectedGridCellEl.classList.remove('mobile-selected');
+        }
+        selectedGridCellEl = td || null;
+        if (selectedGridCellEl) {
+            selectedGridCellEl.classList.add('mobile-selected');
+        }
+    }
+
+    function syncGridInputModeByViewport() {
+        if (!gridEl) return;
+        const mobile = isMobileViewport();
+        gridEl.querySelectorAll('.cell-input').forEach((input) => {
+            input.readOnly = mobile;
+            input.inputMode = mobile ? 'none' : 'numeric';
+        });
+        if (!mobile && selectedGridCellEl) {
+            selectedGridCellEl.classList.remove('mobile-selected');
+            selectedGridCellEl = null;
+        }
+    }
+
+    function applyMobileDigitToSelection(digit) {
+        if (!selectedGridCellEl || !gridEl || !isMobileViewport()) return;
+        if (selectedGridCellEl.classList.contains('given')) return;
+        const input = selectedGridCellEl.querySelector('.cell-input');
+        if (!input) return;
+
+        const safeDigit = Number(digit);
+        if (!(safeDigit >= 1 && safeDigit <= 9)) return;
+
+        const current = Number(input.value || 0);
+        input.value = (current === safeDigit) ? '' : String(safeDigit);
+        updateConflicts();
+        callCandidatesRender();
+        refreshGridPlayMenuVisibility();
+    }
+
     function setGridPlayMenuVisible(visible) {
         if (!gridPlayMenuEl) return;
         gridPlayMenuEl.hidden = !visible;
@@ -166,6 +211,18 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (e.inputType === 'insertText' && !/[1-9]/.test(e.data || '')) {
                         e.preventDefault();
                     }
+                });
+
+                input.addEventListener('focus', () => {
+                    if (isMobileViewport()) {
+                        input.blur();
+                    }
+                });
+
+                input.addEventListener('pointerdown', (e) => {
+                    if (!isMobileViewport()) return;
+                    e.preventDefault();
+                    setSelectedGridCell(td);
                 });
 
                 input.addEventListener('keydown', (e) => {
@@ -215,12 +272,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     td.classList.toggle('given');
                 });
 
+                td.addEventListener('pointerdown', () => {
+                    if (!isMobileViewport()) return;
+                    if (givenModeEl && givenModeEl.checked) return;
+                    setSelectedGridCell(td);
+                });
+
                 tr.appendChild(td);
             }
             tbody.appendChild(tr);
         }
 
         gridEl.appendChild(tbody);
+        syncGridInputModeByViewport();
     }
 
     function getState() {
@@ -1429,6 +1493,14 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    if (mobileGridDigitsEl) {
+        mobileGridDigitsEl.addEventListener('click', (evt) => {
+            const btn = evt.target.closest('button[data-digit]');
+            if (!btn) return;
+            applyMobileDigitToSelection(btn.getAttribute('data-digit'));
+        });
+    }
+
     if (burgerMenuBtn) {
         burgerMenuBtn.addEventListener('click', () => {
             if (window.innerWidth > MOBILE_BREAKPOINT) return;
@@ -1461,6 +1533,7 @@ document.addEventListener('DOMContentLoaded', function () {
     window.addEventListener('resize', () => {
         applyThemeByWidth();
         syncMobileToolsState();
+        syncGridInputModeByViewport();
         renderPreviewCorners();
         syncWarpOverlaySize();
     });
