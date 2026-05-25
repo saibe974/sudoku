@@ -268,6 +268,13 @@ label.btn input[type="checkbox"] {
     font-size: 14px;
     color: var(--muted);
     box-shadow: var(--shadow);
+    opacity: 1;
+    transition: opacity .2s ease;
+}
+
+.status.status-hidden {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .status.ok {
@@ -476,6 +483,58 @@ select.btn {
     grid-template-rows: repeat(9, 1fr);
     border-radius: 8px;
     overflow: hidden;
+    z-index: 2;
+}
+
+.photo-warp-lines-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.warp-detected-line {
+    position: absolute;
+    background: rgba(96, 165, 250, 0.78);
+}
+
+.warp-detected-line.major {
+    background: rgba(147, 197, 253, 0.95);
+}
+
+.warp-detected-line.uncertain {
+    background: rgba(251, 191, 36, 0.95);
+}
+
+.warp-detected-line.inferred {
+    background: rgba(248, 113, 113, 0.98);
+}
+
+.warp-detected-line.vertical {
+    width: 1px;
+    top: 0;
+    bottom: 0;
+}
+
+.warp-detected-line.vertical.major {
+    width: 3px;
+    margin-left: -1px;
+}
+
+.warp-detected-line.horizontal {
+    height: 1px;
+    left: 0;
+    right: 0;
+}
+
+.warp-detected-line.horizontal.major {
+    height: 3px;
+    margin-top: -1px;
 }
 
 .warp-grid-cell {
@@ -509,6 +568,49 @@ select.btn {
 
 .warp-grid-cell input:focus {
     background: rgba(37, 99, 235, 0.28);
+}
+
+.overlay-numpad {
+    position: fixed;
+    z-index: 1200;
+    background: #0b1220;
+    border: 1px solid #35507e;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
+    padding: 8px;
+}
+
+.overlay-numpad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.overlay-numpad-grid button,
+.overlay-numpad-actions button {
+    border: 1px solid #35507e;
+    background: #111827;
+    color: #e5e7eb;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.overlay-numpad-grid button {
+    width: 38px;
+    height: 34px;
+}
+
+.overlay-numpad-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.overlay-numpad-actions button {
+    height: 30px;
+    font-size: 12px;
 }
 
 /* Responsive design */

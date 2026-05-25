@@ -126,12 +126,21 @@ define('MODE', 'debug'); // 'debug' or 'production'
               Debruitage
               <input type="range" id="ocrDenoise" min="0" max="3" value="1" />
             </label>
+            <label class="warp-control" title="Blanchit les lignes detectees avant OCR pour mieux isoler les chiffres">
+              Nettoyage lignes
+              <input type="checkbox" id="ocrLineCleanup" checked />
+            </label>
+            <label class="warp-control" title="Force le recalcul des bordures du cadre depuis l'espacement des cellules internes">
+              Cadre strict
+              <input type="checkbox" id="ocrStrictBorder" checked />
+            </label>
             <button class="btn xs" id="ocrResetTuningBtn" type="button">Reset reglages</button>
             <button class="btn xs" id="ocrSaveTuningBtn" type="button">Enregistrer</button>
           </div>
           <div id="photoWarpSettingsMeta" class="photo-warp-meta"></div>
           <div class="photo-warp-frame" id="photoWarpFrame">
             <img id="photoWarpPreviewImg" alt="Apercu de la grille redressee" />
+            <div id="photoWarpLinesOverlay" class="photo-warp-lines-overlay" hidden></div>
             <div id="photoWarpGridOverlay" class="photo-warp-grid-overlay" hidden></div>
           </div>
         </div>
@@ -169,6 +178,24 @@ define('MODE', 'debug'); // 'debug' or 'production'
       <button class="btn xs" data-action="all">Tout</button>
       <button class="btn xs" data-action="none">Aucun</button>
       <button class="btn xs primary" data-action="ok">OK</button>
+    </div>
+  </div>
+
+  <div id="overlayNumpad" class="overlay-numpad" hidden>
+    <div class="overlay-numpad-grid">
+      <button type="button" data-digit="1">1</button>
+      <button type="button" data-digit="2">2</button>
+      <button type="button" data-digit="3">3</button>
+      <button type="button" data-digit="4">4</button>
+      <button type="button" data-digit="5">5</button>
+      <button type="button" data-digit="6">6</button>
+      <button type="button" data-digit="7">7</button>
+      <button type="button" data-digit="8">8</button>
+      <button type="button" data-digit="9">9</button>
+    </div>
+    <div class="overlay-numpad-actions">
+      <button type="button" data-action="clear">Effacer</button>
+      <button type="button" data-action="cancel">Annuler</button>
     </div>
   </div>
 

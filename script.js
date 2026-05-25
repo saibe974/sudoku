@@ -12,17 +12,21 @@ document.addEventListener('DOMContentLoaded', function () {
     const photoPreviewImgEl = document.getElementById('photoPreviewImg');
     const photoCornersOverlayEl = document.getElementById('photoCornersOverlay');
     const photoCornersPolygonEl = document.getElementById('photoCornersPolygon');
+    const overlayNumpadEl = document.getElementById('overlayNumpad');
     const photoNextStepBtn = document.getElementById('photoNextStepBtn');
     const photoRunBtn = document.getElementById('photoRunBtn');
     const photoCancelBtn = document.getElementById('photoCancelBtn');
     const photoWarpPanelEl = document.getElementById('photoWarpPanel');
     const photoWarpPreviewImgEl = document.getElementById('photoWarpPreviewImg');
+    const photoWarpLinesOverlayEl = document.getElementById('photoWarpLinesOverlay');
     const photoWarpGridOverlayEl = document.getElementById('photoWarpGridOverlay');
     const ocrBrightnessEl = document.getElementById('ocrBrightness');
     const ocrContrastEl = document.getElementById('ocrContrast');
     const ocrBlockSizeEl = document.getElementById('ocrBlockSize');
     const ocrThresholdCEl = document.getElementById('ocrThresholdC');
     const ocrDenoiseEl = document.getElementById('ocrDenoise');
+    const ocrLineCleanupEl = document.getElementById('ocrLineCleanup');
+    const ocrStrictBorderEl = document.getElementById('ocrStrictBorder');
     const ocrResetTuningBtn = document.getElementById('ocrResetTuningBtn');
     const ocrSaveTuningBtn = document.getElementById('ocrSaveTuningBtn');
     const photoWarpSettingsMetaEl = document.getElementById('photoWarpSettingsMeta');
@@ -35,9 +39,15 @@ document.addEventListener('DOMContentLoaded', function () {
     let pendingPhotoCornerRatios = null;
     let pendingWarpValues = null;
     let pendingWarpGrayBase = null;
+    let pendingWarpGeometry = null;
+    let overlayCellOcrInProgress = false;
+    let overlayNumpadTarget = null;
     let dragCornerIndex = -1;
     let hasManualCornerEdits = false;
     let photoImportInProgress = false;
+    let statusHideTimer = null;
+
+    const STATUS_AUTO_HIDE_MS = 4000;
 
     const DEFAULT_OCR_TUNING = {
         brightness: 0,
@@ -49,8 +59,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function setStatus(msg, type = '') {
         if (!statusEl) return;
+
+        if (statusHideTimer) {
+            clearTimeout(statusHideTimer);
+            statusHideTimer = null;
+        }
+
+        statusEl.classList.remove('status-hidden');
         statusEl.textContent = msg;
         statusEl.className = 'status ' + (type || '');
+
+        statusHideTimer = setTimeout(() => {
+            if (!statusEl) return;
+            statusEl.classList.add('status-hidden');
+        }, STATUS_AUTO_HIDE_MS);
     }
 
     function callCandidatesRender() {
@@ -291,6 +313,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function resetPhotoPreview() {
+        hideOverlayNumpad();
         pendingPhotoFile = null;
         pendingPhotoCornerRatios = null;
         pendingWarpValues = null;
@@ -367,7 +390,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function clearWarpPreview() {
+        hideOverlayNumpad();
         pendingWarpValues = null;
+        pendingWarpGeometry = null;
         if (photoWarpPreviewImgEl) {
             photoWarpPreviewImgEl.removeAttribute('src');
         }
@@ -377,6 +402,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (photoWarpGridOverlayEl) {
             photoWarpGridOverlayEl.hidden = true;
             photoWarpGridOverlayEl.innerHTML = '';
+        }
+        if (photoWarpLinesOverlayEl) {
+            photoWarpLinesOverlayEl.hidden = true;
+            photoWarpLinesOverlayEl.innerHTML = '';
         }
 
         if (pendingWarpGrayBase) {
@@ -405,7 +434,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function saveOcrTuningToStorage() {
         try {
-            localStorage.setItem(OCR_TUNING_STORAGE_KEY, JSON.stringify(getOcrTuningFromControls()));
+            const data = getOcrTuningFromControls();
+            data.lineCleanup = ocrLineCleanupEl ? !!ocrLineCleanupEl.checked : true;
+            data.strictBorder = ocrStrictBorderEl ? !!ocrStrictBorderEl.checked : true;
+            localStorage.setItem(OCR_TUNING_STORAGE_KEY, JSON.stringify(data));
         } catch (_) { }
     }
 
@@ -419,6 +451,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (ocrBlockSizeEl && t.blockSize != null) ocrBlockSizeEl.value = String(t.blockSize);
             if (ocrThresholdCEl && t.thresholdC != null) ocrThresholdCEl.value = String(t.thresholdC);
             if (ocrDenoiseEl && t.denoise != null) ocrDenoiseEl.value = String(t.denoise);
+            if (ocrLineCleanupEl && t.lineCleanup != null) ocrLineCleanupEl.checked = !!t.lineCleanup;
+            if (ocrStrictBorderEl && t.strictBorder != null) ocrStrictBorderEl.checked = !!t.strictBorder;
             return true;
         } catch (_) { return false; }
     }
@@ -430,6 +464,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (ocrBlockSizeEl) ocrBlockSizeEl.value = String(DEFAULT_OCR_TUNING.blockSize);
             if (ocrThresholdCEl) ocrThresholdCEl.value = String(DEFAULT_OCR_TUNING.thresholdC);
             if (ocrDenoiseEl) ocrDenoiseEl.value = String(DEFAULT_OCR_TUNING.denoise);
+            if (ocrLineCleanupEl) ocrLineCleanupEl.checked = true;
+            if (ocrStrictBorderEl) ocrStrictBorderEl.checked = true;
         }
     }
 
@@ -439,17 +475,39 @@ document.addEventListener('DOMContentLoaded', function () {
         if (ocrBlockSizeEl) ocrBlockSizeEl.value = String(DEFAULT_OCR_TUNING.blockSize);
         if (ocrThresholdCEl) ocrThresholdCEl.value = String(DEFAULT_OCR_TUNING.thresholdC);
         if (ocrDenoiseEl) ocrDenoiseEl.value = String(DEFAULT_OCR_TUNING.denoise);
+        if (ocrLineCleanupEl) ocrLineCleanupEl.checked = true;
+        if (ocrStrictBorderEl) ocrStrictBorderEl.checked = true;
         try { localStorage.removeItem(OCR_TUNING_STORAGE_KEY); } catch (_) { }
+    }
+
+    function isLineCleanupEnabled() {
+        return !ocrLineCleanupEl || !!ocrLineCleanupEl.checked;
+    }
+
+    function isStrictBorderEnabled() {
+        return !ocrStrictBorderEl || !!ocrStrictBorderEl.checked;
     }
 
     function updateWarpSettingsMeta() {
         if (!photoWarpSettingsMetaEl) return;
         const t = getOcrTuningFromControls();
+        const inferred = pendingWarpGeometry && Number(pendingWarpGeometry.inferredCount || 0) > 0
+            ? ' | Lignes inferees: ' + Number(pendingWarpGeometry.inferredCount || 0)
+            : '';
+        const borders = pendingWarpGeometry && Number(pendingWarpGeometry.borderRefinedCount || 0) > 0
+            ? ' | Bordures recalculees: ' + Number(pendingWarpGeometry.borderRefinedCount || 0)
+            : '';
+        const cleanup = isLineCleanupEnabled() ? 'ON' : 'OFF';
+        const strict = isStrictBorderEnabled() ? 'ON' : 'OFF';
         photoWarpSettingsMetaEl.textContent = 'Luminosite: ' + t.brightness
             + ' | Contraste: ' + t.contrast + '%'
             + ' | Fenetre: ' + t.blockSize
             + ' | C: ' + t.thresholdC
-            + ' | Debruitage: ' + t.denoise;
+            + ' | Debruitage: ' + t.denoise
+            + ' | Nettoyage lignes: ' + cleanup
+            + ' | Cadre strict: ' + strict
+            + inferred
+            + borders;
     }
 
     function renderWarpProcessedPreview(rebuildOverlay = true) {
@@ -457,11 +515,26 @@ document.addEventListener('DOMContentLoaded', function () {
         const tuning = getOcrTuningFromControls();
         const bwForPreview = getOcrApi().preprocessWarpForOcrHighContrast(pendingWarpGrayBase, tuning);
         try {
+            const geometry = getOcrApi().detectGridGeometryFromBinary(bwForPreview, SIZE, {
+                strictBorderRefine: isStrictBorderEnabled()
+            });
+            pendingWarpGeometry = geometry;
+            renderWarpDetectedLinesOverlay(geometry);
+
+            const cleanupEnabled = isLineCleanupEnabled();
+            const previewMat = (cleanupEnabled && geometry)
+                ? getOcrApi().removeDetectedGridLines(bwForPreview, geometry, 5)
+                : bwForPreview;
+
             const bwCanvas = document.createElement('canvas');
-            bwCanvas.width = bwForPreview.cols;
-            bwCanvas.height = bwForPreview.rows;
-            cv.imshow(bwCanvas, bwForPreview);
+            bwCanvas.width = previewMat.cols;
+            bwCanvas.height = previewMat.rows;
+            cv.imshow(bwCanvas, previewMat);
             photoWarpPreviewImgEl.src = bwCanvas.toDataURL('image/png');
+
+            if (previewMat !== bwForPreview) {
+                previewMat.delete();
+            }
         } finally {
             bwForPreview.delete();
         }
@@ -474,6 +547,48 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
         updateWarpSettingsMeta();
+    }
+
+    function renderWarpDetectedLinesOverlay(geometry) {
+        if (!photoWarpLinesOverlayEl) return;
+
+        if (!geometry || !Array.isArray(geometry.xLines) || !Array.isArray(geometry.yLines)
+            || geometry.xLines.length !== (SIZE + 1) || geometry.yLines.length !== (SIZE + 1)
+            || !geometry.width || !geometry.height) {
+            photoWarpLinesOverlayEl.hidden = true;
+            photoWarpLinesOverlayEl.innerHTML = '';
+            return;
+        }
+
+        const toPctX = (x) => (Math.max(0, Math.min(1, x / geometry.width)) * 100);
+        const toPctY = (y) => (Math.max(0, Math.min(1, y / geometry.height)) * 100);
+
+        photoWarpLinesOverlayEl.innerHTML = '';
+
+        geometry.xLines.forEach((x, i) => {
+            const line = document.createElement('div');
+            const xMeta = Array.isArray(geometry.xMeta) ? geometry.xMeta[i] : null;
+            line.className = 'warp-detected-line vertical'
+                + ((i % 3 === 0) ? ' major' : '')
+                + (xMeta && xMeta.uncertain ? ' uncertain' : '')
+                + (xMeta && xMeta.inferred ? ' inferred' : '');
+            line.style.left = toPctX(x).toFixed(4) + '%';
+            photoWarpLinesOverlayEl.appendChild(line);
+        });
+
+        geometry.yLines.forEach((y, i) => {
+            const line = document.createElement('div');
+            const yMeta = Array.isArray(geometry.yMeta) ? geometry.yMeta[i] : null;
+            line.className = 'warp-detected-line horizontal'
+                + ((i % 3 === 0) ? ' major' : '')
+                + (yMeta && yMeta.uncertain ? ' uncertain' : '')
+                + (yMeta && yMeta.inferred ? ' inferred' : '');
+            line.style.top = toPctY(y).toFixed(4) + '%';
+            photoWarpLinesOverlayEl.appendChild(line);
+        });
+
+        photoWarpLinesOverlayEl.hidden = false;
+        syncWarpOverlaySize();
     }
 
     function renderWarpGridOverlay(values) {
@@ -529,6 +644,22 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 });
 
+                input.addEventListener('click', () => {
+                    const hasValue = !!(input.value && String(input.value).trim() !== '');
+                    const modelValue = pendingWarpValues && pendingWarpValues[r]
+                        ? Number(pendingWarpValues[r][c] || 0)
+                        : 0;
+
+                    if (hasValue || modelValue > 0) {
+                        hideOverlayNumpad();
+                        showOverlayNumpad(r, c, input);
+                        setStatus('Saisie manuelle pour [' + (r + 1) + ',' + (c + 1) + '] via pave numerique.', 'ok');
+                        return;
+                    }
+
+                    runOverlayCellOcr(r, c, input);
+                });
+
                 cell.appendChild(input);
                 photoWarpGridOverlayEl.appendChild(cell);
             }
@@ -538,13 +669,97 @@ document.addEventListener('DOMContentLoaded', function () {
         syncWarpOverlaySize();
     }
 
+    async function runOverlayCellOcr(row, col, inputEl) {
+        if (overlayCellOcrInProgress) return;
+        if (!pendingWarpGrayBase) return;
+
+        hideOverlayNumpad();
+
+        overlayCellOcrInProgress = true;
+        if (inputEl) inputEl.disabled = true;
+
+        try {
+            const tuning = getOcrTuningFromControls();
+            const bwForOcr = getOcrApi().preprocessWarpForOcrHighContrast(pendingWarpGrayBase, tuning);
+            let result;
+            try {
+                setStatus('OCR cible sur cellule [' + (row + 1) + ',' + (col + 1) + ']...');
+                result = await getOcrApi().recognizeSingleCell(bwForOcr, row, col, {
+                    size: SIZE,
+                    minInkRatio: 0.015,
+                    secondPass: true,
+                    lineEraseHalfThickness: isLineCleanupEnabled() ? 5 : 0,
+                    strictBorderRefine: isStrictBorderEnabled()
+                });
+            } finally {
+                bwForOcr.delete();
+            }
+
+            if (result && result.digit >= 1 && result.digit <= 9) {
+                pendingWarpValues[row][col] = result.digit;
+                inputEl.value = String(result.digit);
+                setStatus('Cellule [' + (row + 1) + ',' + (col + 1) + '] reconnue: ' + result.digit
+                    + ' (conf ' + Math.round(Number(result.confidence || 0)) + '%).', 'ok');
+                return;
+            }
+
+            if (result && result.skippedByInkFilter) {
+                setStatus('Cellule [' + (row + 1) + ',' + (col + 1) + '] ignoree (peu d\'encre, probablement vide).', 'warn');
+                showOverlayNumpad(row, col, inputEl);
+            } else {
+                setStatus('Aucun chiffre fiable detecte pour [' + (row + 1) + ',' + (col + 1) + '].', 'warn');
+                showOverlayNumpad(row, col, inputEl);
+            }
+        } catch (err) {
+            setStatus('Echec OCR cellule [' + (row + 1) + ',' + (col + 1) + '] : ' + err.message, 'err');
+            showOverlayNumpad(row, col, inputEl);
+        } finally {
+            overlayCellOcrInProgress = false;
+            if (inputEl) inputEl.disabled = false;
+        }
+    }
+
+    function showOverlayNumpad(row, col, inputEl) {
+        if (!overlayNumpadEl || !inputEl) return;
+        overlayNumpadTarget = { row, col, inputEl };
+
+        overlayNumpadEl.hidden = false;
+        const rect = inputEl.getBoundingClientRect();
+        const padRect = overlayNumpadEl.getBoundingClientRect();
+
+        let left = rect.right + 8;
+        let top = rect.top;
+
+        if (left + padRect.width > window.innerWidth - 8) {
+            left = Math.max(8, rect.left - padRect.width - 8);
+        }
+        if (top + padRect.height > window.innerHeight - 8) {
+            top = Math.max(8, window.innerHeight - padRect.height - 8);
+        }
+
+        overlayNumpadEl.style.left = Math.round(left) + 'px';
+        overlayNumpadEl.style.top = Math.round(top) + 'px';
+    }
+
+    function hideOverlayNumpad() {
+        if (!overlayNumpadEl) return;
+        overlayNumpadEl.hidden = true;
+        overlayNumpadTarget = null;
+    }
+
     function syncWarpOverlaySize() {
-        if (!photoWarpGridOverlayEl || !photoWarpPreviewImgEl) return;
+        if (!photoWarpPreviewImgEl) return;
         const w = photoWarpPreviewImgEl.clientWidth;
         const h = photoWarpPreviewImgEl.clientHeight;
         if (!w || !h) return;
-        photoWarpGridOverlayEl.style.width = w + 'px';
-        photoWarpGridOverlayEl.style.height = h + 'px';
+        if (photoWarpGridOverlayEl) {
+            photoWarpGridOverlayEl.style.width = w + 'px';
+            photoWarpGridOverlayEl.style.height = h + 'px';
+        }
+        if (photoWarpLinesOverlayEl) {
+            photoWarpLinesOverlayEl.style.width = w + 'px';
+            photoWarpLinesOverlayEl.style.height = h + 'px';
+        }
     }
 
     function clamp01(n) {
@@ -597,6 +812,16 @@ document.addEventListener('DOMContentLoaded', function () {
         clearWarpPreview();
     }
 
+    function getImageBoundaryCorners(imageWidth, imageHeight) {
+        if (!imageWidth || !imageHeight) return null;
+        return [
+            { x: 0, y: 0 },
+            { x: imageWidth - 1, y: 0 },
+            { x: imageWidth - 1, y: imageHeight - 1 },
+            { x: 0, y: imageHeight - 1 }
+        ];
+    }
+
     function getPictureApi() {
         if (!window.SudokuPicture) {
             throw new Error('Module image indisponible.');
@@ -616,6 +841,8 @@ document.addEventListener('DOMContentLoaded', function () {
             file,
             cornerRatios,
             size: SIZE,
+            lineEraseHalfThickness: isLineCleanupEnabled() ? 5 : 0,
+            strictBorderRefine: isStrictBorderEnabled(),
             getTuning: getOcrTuningFromControls,
             setStatus,
             setState
@@ -677,13 +904,19 @@ document.addEventListener('DOMContentLoaded', function () {
                         hasManualCornerEdits = false;
                         setStatus('Photo chargee. Les 4 coins detectes sont affiches.', 'ok');
                     } else {
-                        setPreviewCornersFromPoints(null, 0, 0);
-                        setStatus('Photo chargee, mais les coins n\'ont pas ete detectes automatiquement.', 'warn');
+                        const fallback = getImageBoundaryCorners(detected.imageWidth, detected.imageHeight);
+                        setPreviewCornersFromPoints(fallback, detected.imageWidth, detected.imageHeight);
+                        hasManualCornerEdits = true;
+                        setStatus('Coins non detectes: coins places aux 4 bords de l\'image. Ajuste-les manuellement puis clique sur Etape suivante.', 'warn');
                     }
                 })
                 .catch(() => {
-                    setPreviewCornersFromPoints(null, 0, 0);
-                    setStatus('Photo chargee. Detection des coins indisponible pour cette image.', 'warn');
+                    const w = Number(photoPreviewImgEl && photoPreviewImgEl.naturalWidth ? photoPreviewImgEl.naturalWidth : 0);
+                    const h = Number(photoPreviewImgEl && photoPreviewImgEl.naturalHeight ? photoPreviewImgEl.naturalHeight : 0);
+                    const fallback = getImageBoundaryCorners(w, h);
+                    setPreviewCornersFromPoints(fallback, w, h);
+                    hasManualCornerEdits = true;
+                    setStatus('Detection des coins indisponible: coins places aux 4 bords pour ajustement manuel.', 'warn');
                 });
         });
     }
@@ -758,6 +991,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     try {
                         ocrState = await getOcrApi().recognizeGrid(bwForOcr, {
                             size: SIZE,
+                            lineEraseHalfThickness: isLineCleanupEnabled() ? 5 : 0,
+                            strictBorderRefine: isStrictBorderEnabled(),
                             onProgress: (done, total) => setStatus('Analyse OCR... ' + done + '/' + total)
                         });
                     } finally {
@@ -793,6 +1028,47 @@ document.addEventListener('DOMContentLoaded', function () {
             if (photoImportInProgress) return;
             resetPhotoPreview();
             setStatus('Import photo annule.', 'warn');
+        });
+    }
+
+    if (overlayNumpadEl) {
+        overlayNumpadEl.addEventListener('click', (evt) => {
+            const digitBtn = evt.target.closest('button[data-digit]');
+            const actionBtn = evt.target.closest('button[data-action]');
+            if (!overlayNumpadTarget) {
+                hideOverlayNumpad();
+                return;
+            }
+
+            if (digitBtn) {
+                const digit = Number(digitBtn.getAttribute('data-digit'));
+                if (digit >= 1 && digit <= 9) {
+                    pendingWarpValues[overlayNumpadTarget.row][overlayNumpadTarget.col] = digit;
+                    overlayNumpadTarget.inputEl.value = String(digit);
+                    setStatus('Valeur saisie manuellement pour ['
+                        + (overlayNumpadTarget.row + 1) + ',' + (overlayNumpadTarget.col + 1) + '] : ' + digit + '.', 'ok');
+                }
+                hideOverlayNumpad();
+                return;
+            }
+
+            if (actionBtn) {
+                const action = actionBtn.getAttribute('data-action');
+                if (action === 'clear') {
+                    pendingWarpValues[overlayNumpadTarget.row][overlayNumpadTarget.col] = 0;
+                    overlayNumpadTarget.inputEl.value = '';
+                    setStatus('Cellule [' + (overlayNumpadTarget.row + 1) + ',' + (overlayNumpadTarget.col + 1)
+                        + '] videe manuellement.', 'ok');
+                }
+                hideOverlayNumpad();
+            }
+        });
+
+        window.addEventListener('pointerdown', (evt) => {
+            if (overlayNumpadEl.hidden) return;
+            if (overlayNumpadEl.contains(evt.target)) return;
+            if (overlayNumpadTarget && overlayNumpadTarget.inputEl === evt.target) return;
+            hideOverlayNumpad();
         });
     }
 
@@ -850,6 +1126,20 @@ document.addEventListener('DOMContentLoaded', function () {
             renderWarpProcessedPreview(true);
         });
     });
+
+    if (ocrLineCleanupEl) {
+        ocrLineCleanupEl.addEventListener('change', () => {
+            saveOcrTuningToStorage();
+            renderWarpProcessedPreview(true);
+        });
+    }
+
+    if (ocrStrictBorderEl) {
+        ocrStrictBorderEl.addEventListener('change', () => {
+            saveOcrTuningToStorage();
+            renderWarpProcessedPreview(true);
+        });
+    }
 
     if (ocrResetTuningBtn) {
         ocrResetTuningBtn.addEventListener('click', () => {
