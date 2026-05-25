@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Éditeur de grilles Sudoku (JSON I/O)</title>
+  <style>
+    :root {
+      --bg: #0f172a;         /* slate-900 */
+      --panel: #111827;      /* gray-900 */
+      --panel-2: #0b1220;    /* custom */
+      --text: #e5e7eb;       /* gray-200 */
+      --muted: #9ca3af;      /* gray-400 */
+      --accent: #60a5fa;     /* blue-400 */
+      --accent-2: #a78bfa;   /* violet-400 */
+      --ok: #22c55e;         /* green-500 */
+      --warn: #f59e0b;       /* amber-500 */
+      --err: #ef4444;        /* red-500 */
+      --grid: #1f2937;       /* gray-800 */
+      --grid-2: #374151;     /* gray-700 */
+      --cell: #0b1220;       /* custom */
+      --cell-focus: #0f1e3a; /* custom */
+      --given: #0a3a24;      /* custom */
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+    }
+
+    html, body {
+      height: 100%;
+      background: radial-gradient(1200px 800px at 20% 0%, #0b1220 0%, #0f172a 35%, #0a0f1e 100%);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      margin: 0;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 24px auto 80px;
+      padding: 0 16px;
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 20px;
+    }
+
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      font-size: clamp(20px, 3vw, 28px);
+      letter-spacing: .3px;
+      margin: 0;
+      font-weight: 700;
+    }
+
+    .subtitle { color: var(--muted); font-size: 14px; }
+
+    .card {
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid #1f2937;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .grid-wrapper {
+      display: grid;
+      place-items: center;
+      padding: 16px;
+    }
+
+    .sudoku-grid {
+      border-collapse: collapse;
+      background: var(--grid);
+      border-radius: 12px;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .sudoku-grid td {
+      padding: 0;
+      width: 48px;
+      height: 48px;
+      border: 1px solid var(--grid-2);
+      position: relative;
+      background: var(--cell);
+    }
+
+    /* Thick borders for 3x3 blocks */
+    .sudoku-grid tr:nth-child(3n) td { border-bottom: 3px solid var(--grid-2); }
+    .sudoku-grid tr:nth-child(1) td { border-top: 3px solid var(--grid-2); }
+    .sudoku-grid td:nth-child(3n) { border-right: 3px solid var(--grid-2); }
+    .sudoku-grid td:nth-child(1) { border-left: 3px solid var(--grid-2); }
+
+    .cell-input {
+      width: 100%;
+      height: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-weight: 700;
+      font-size: 22px;
+      text-align: center;
+      caret-color: var(--accent);
+    }
+
+    .cell-input::placeholder { color: #42526b; }
+    .cell-input:focus { background: var(--cell-focus); }
+
+    .given {
+      background: linear-gradient(180deg, rgba(46, 204, 113, 0.08), rgba(46, 204, 113, 0.02));
+      font-weight: 800;
+      position: relative;
+    }
+    .given .cell-input { color: #b7ffcf; }
+
+    .cell-error { box-shadow: inset 0 0 0 2px var(--err); }
+
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+    .btn {
+      background: #0b1220;
+      border: 1px solid #27354d;
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform .05s ease, background .2s ease, border-color .2s ease;
+    }
+    .btn:hover { background: #0e182d; border-color: #35507e; }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: linear-gradient(180deg, #0e1a33, #0a1427); border-color: #2a4a86; }
+
+    .toggle {
+      display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
+      border: 1px solid #27354d; border-radius: 999px; background: #0b1220; cursor: pointer;
+      font-weight: 600; font-size: 14px; color: var(--text);
+    }
+    .toggle input { accent-color: var(--accent); width: 18px; height: 18px; }
+
+    .right-panel textarea {
+      width: 100%; min-height: 240px; resize: vertical; border-radius: 12px; border: 1px solid #27354d;
+      background: #0b1220; color: var(--text); padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    .meta { color: var(--muted); font-size: 12px; }
+
+    .status { margin-top: 10px; font-size: 14px; color: var(--muted); }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+
+    .grid-footer {
+      margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;
+    }
+
+    /* Responsive design */
+    @media (max-width: 980px) {
+      .container { 
+        grid-template-columns: 1fr;
+        max-width: 100%;
+        margin: 16px auto 40px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 0 12px;
+        gap: 16px;
+        margin: 12px auto 30px;
+      }
+
+      h1 {
+        font-size: 20px;
+      }
+
+      .subtitle {
+        font-size: 12px;
+      }
+
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .toolbar {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .card {
+        padding: 12px;
+      }
+
+      .sudoku-grid td {
+        width: 38px;
+        height: 38px;
+      }
+
+      .cell-input {
+        font-size: 18px;
+      }
+
+      .btn {
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .toggle {
+        padding: 7px 10px;
+        font-size: 13px;
+      }
+
+      .right-panel textarea {
+        min-height: 200px;
+        font-size: 13px;
+      }
+
+      .grid-footer {
+        flex-direction: column;
+      }
+
+      .grid-footer .btn {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 0 8px;
+        margin: 8px auto 20px;
+      }
+
+      h1 {
+        font-size: 18px;
+      }
+
+      .subtitle {
+        font-size: 11px;
+      }
+
+      .card {
+        padding: 8px;
+        border-radius: 12px;
+      }
+
+      .grid-wrapper {
+        padding: 8px;
+      }
+
+      .sudoku-grid td {
+        width: 32px;
+        height: 32px;
+      }
+
+      .cell-input {
+        font-size: 16px;
+      }
+
+      .btn {
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+
+      .toggle {
+        padding: 6px 8px;
+        font-size: 12px;
+      }
+
+      .toggle input {
+        width: 16px;
+        height: 16px;
+      }
+
+      .toolbar {
+        gap: 6px;
+      }
+
+      .right-panel textarea {
+        min-height: 180px;
+        font-size: 12px;
+        padding: 10px;
+      }
+
+      .right-panel h3 {
+        font-size: 16px;
+      }
+
+      .meta {
+        font-size: 11px;
+      }
+
+      .status {
+        font-size: 12px;
+      }
+    }
+
+    /* Très petits écrans (< 360px) */
+    @media (max-width: 360px) {
+      .sudoku-grid td {
+        width: 28px;
+        height: 28px;
+      }
+
+      .cell-input {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Éditeur de Sudoku</h1>
+        <div class="subtitle">Construis une grille, marque les cases « données », puis importe/exporte en JSON.</div>
+      </div>
+      <div class="toolbar">
+        <label class="toggle" title="Activer pour basculer l'état 'donné' d'une case en cliquant.">
+          <input type="checkbox" id="givenMode" /> Mode Données
+        </label>
+        <button class="btn" id="clearValuesBtn" title="Efface seulement les valeurs (conserve les 'données')">Effacer valeurs</button>
+        <button class="btn" id="clearAllBtn" title="Réinitialise tout">Tout effacer</button>
+        <button class="btn primary" id="exportBtn" title="Exporter vers JSON">Exporter JSON</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="grid-wrapper">
+        <table class="sudoku-grid" aria-label="Grille Sudoku 9×9" id="grid"></table>
+      </div>
+      <div class="grid-footer">
+        <button class="btn" id="downloadBtn">Télécharger .json</button>
+        <label class="btn" for="fileInput">Importer depuis un fichier</label>
+        <input style="display:none" type="file" id="fileInput" accept="application/json,.json" />
+      </div>
+      <div id="status" class="status">Prêt.</div>
+    </section>
+
+    <aside class="card right-panel">
+      <h3 style="margin-top:0">Zone JSON</h3>
+      <div class="meta">Tu peux coller/éditer ici. Format :
+        <code>{"values": number[9][9], "givens": boolean[9][9]}</code>
+      </div>
+      <textarea id="jsonArea" placeholder='{"values":[[0,0,0,...],[...]], "givens":[[false,false,...],[...]]}'></textarea>
+      <div class="grid-footer">
+        <button class="btn" id="importBtn">Importer depuis la zone</button>
+        <button class="btn" id="copyBtn">Copier le JSON</button>
+        <button class="btn" id="exampleBtn">Charger un exemple</button>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const gridEl = document.getElementById('grid');
+    const givenModeEl = document.getElementById('givenMode');
+    const statusEl = document.getElementById('status');
+
+    const jsonArea = document.getElementById('jsonArea');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const exampleBtn = document.getElementById('exampleBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const fileInput = document.getElementById('fileInput');
+
+    const clearValuesBtn = document.getElementById('clearValuesBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+
+    const SIZE = 9;
+
+    function buildGrid() {
+      const tbody = document.createElement('tbody');
+      for (let r = 0; r < SIZE; r++) {
+        const tr = document.createElement('tr');
+        for (let c = 0; c < SIZE; c++) {
+          const td = document.createElement('td');
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.inputMode = 'numeric';
+          input.maxLength = 1;
+          input.className = 'cell-input';
+          input.placeholder = '';
+          input.dataset.r = r;
+          input.dataset.c = c;
+
+          input.addEventListener('beforeinput', e => {
+            if (e.inputType === 'insertText') {
+              const ch = e.data;
+              if (!/[1-9]/.test(ch)) {
+                e.preventDefault();
+              }
+            }
+          });
+
+          input.addEventListener('keydown', e => {
+            const r = Number(input.dataset.r), c = Number(input.dataset.c);
+            if (e.key === 'Backspace' || e.key === 'Delete') {
+              input.value = '';
+              e.preventDefault();
+              updateConflicts();
+              setStatus('Valeur effacée.');
+              return;
+            }
+            const nav = (nr, nc) => {
+              const next = document.querySelector(`input[data-r="${nr}"][data-c="${nc}"]`);
+              if (next) next.focus();
+            };
+            if (e.key === 'ArrowUp') { e.preventDefault(); nav(Math.max(0, r-1), c); }
+            if (e.key === 'ArrowDown') { e.preventDefault(); nav(Math.min(SIZE-1, r+1), c); }
+            if (e.key === 'ArrowLeft') { e.preventDefault(); nav(r, Math.max(0, c-1)); }
+            if (e.key === 'ArrowRight') { e.preventDefault(); nav(r, Math.min(SIZE-1, c+1)); }
+          });
+
+          input.addEventListener('input', () => {
+            // Keep only a single digit 1-9
+            input.value = input.value.replace(/[^1-9]/g, '').slice(0,1);
+            updateConflicts();
+          });
+
+          td.appendChild(input);
+          td.addEventListener('click', (e) => {
+            if (!givenModeEl.checked) return;
+            td.classList.toggle('given');
+          });
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      gridEl.innerHTML = '';
+      gridEl.appendChild(tbody);
+    }
+
+    function getState() {
+      const values = Array.from({length: SIZE}, () => Array(SIZE).fill(0));
+      const givens = Array.from({length: SIZE}, () => Array(SIZE).fill(false));
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          const td = gridEl.rows[r].cells[c];
+          const input = td.querySelector('input');
+          const v = Number(input.value || 0);
+          values[r][c] = (v >= 1 && v <= 9) ? v : 0;
+          givens[r][c] = td.classList.contains('given');
+        }
+      }
+      return { values, givens };
+    }
+
+    function setState(state) {
+      const { values, givens } = state;
+      if (!Array.isArray(values) || values.length !== SIZE) throw new Error('values doit être 9×9');
+      if (!Array.isArray(givens) || givens.length !== SIZE) throw new Error('givens doit être 9×9');
+      for (let r = 0; r < SIZE; r++) {
+        if (!Array.isArray(values[r]) || values[r].length !== SIZE) throw new Error('values doit être 9×9');
+        if (!Array.isArray(givens[r]) || givens[r].length !== SIZE) throw new Error('givens doit être 9×9');
+        for (let c = 0; c < SIZE; c++) {
+          const td = gridEl.rows[r].cells[c];
+          const input = td.querySelector('input');
+          const v = Number(values[r][c] || 0);
+          input.value = (v >= 1 && v <= 9) ? String(v) : '';
+          td.classList.toggle('given', !!givens[r][c]);
+        }
+      }
+      updateConflicts();
+    }
+
+    function updateConflicts() {
+      // Clear previous error states
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          gridEl.rows[r].cells[c].classList.remove('cell-error');
+        }
+      }
+      const { values } = getState();
+
+      // Mark conflicts in rows, cols, blocks
+      const markDuplicates = (cells) => {
+        const map = new Map();
+        cells.forEach(({r,c,v}) => {
+          if (v === 0) return;
+          const key = v;
+          if (!map.has(key)) map.set(key, []);
+          map.get(key).push({r,c});
+        });
+        map.forEach(list => {
+          if (list.length > 1) {
+            list.forEach(({r,c}) => gridEl.rows[r].cells[c].classList.add('cell-error'));
+          }
+        });
+      };
+
+      // Rows
+      for (let r = 0; r < SIZE; r++) {
+        const row = [];
+        for (let c = 0; c < SIZE; c++) row.push({r,c,v:values[r][c]});
+        markDuplicates(row);
+      }
+      // Cols
+      for (let c = 0; c < SIZE; c++) {
+        const col = [];
+        for (let r = 0; r < SIZE; r++) col.push({r,c,v:values[r][c]});
+        markDuplicates(col);
+      }
+      // Blocks
+      for (let br = 0; br < 3; br++) {
+        for (let bc = 0; bc < 3; bc++) {
+          const blk = [];
+          for (let r = br*3; r < br*3+3; r++) {
+            for (let c = bc*3; c < bc*3+3; c++) {
+              blk.push({r,c,v:values[r][c]});
+            }
+          }
+          markDuplicates(blk);
+        }
+      }
+    }
+
+    function setStatus(msg, type = '') {
+      statusEl.textContent = msg;
+      statusEl.className = 'status ' + (type || '');
+    }
+
+    // Export/Import helpers
+    function exportToTextarea() {
+      const state = getState();
+      const json = JSON.stringify(state, null, 2);
+      jsonArea.value = json;
+      setStatus('Exporté vers la zone JSON.', 'ok');
+    }
+
+    function importFromTextarea() {
+      try {
+        const obj = JSON.parse(jsonArea.value);
+        validateState(obj);
+        setState(obj);
+        setStatus('Import réussi depuis la zone JSON.', 'ok');
+      } catch (e) {
+        setStatus('Erreur d\'import : ' + e.message, 'err');
+      }
+    }
+
+    function validateState(obj) {
+      if (!obj || typeof obj !== 'object') throw new Error('Objet JSON invalide.');
+      const { values, givens } = obj;
+      if (!Array.isArray(values) || values.length !== 9) throw new Error('"values" doit être un tableau 9×9.');
+      if (!Array.isArray(givens) || givens.length !== 9) throw new Error('"givens" doit être un tableau 9×9.');
+      for (let r = 0; r < 9; r++) {
+        if (!Array.isArray(values[r]) || values[r].length !== 9) throw new Error('"values" doit être 9×9.');
+        if (!Array.isArray(givens[r]) || givens[r].length !== 9) throw new Error('"givens" doit être 9×9.');
+        for (let c = 0; c < 9; c++) {
+          const v = Number(values[r][c]);
+          if (!Number.isFinite(v) || v < 0 || v > 9) throw new Error(`Valeur hors plage à (${r+1},${c+1}).`);
+          if (typeof givens[r][c] !== 'boolean') throw new Error(`Flag given invalide à (${r+1},${c+1}).`);
+        }
+      }
+    }
+
+    function downloadJSON() {
+      const state = getState();
+      const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'sudoku.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setStatus('Fichier sudoku.json téléchargé.', 'ok');
+    }
+
+    function importFromFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const obj = JSON.parse(reader.result);
+          validateState(obj);
+          setState(obj);
+          jsonArea.value = JSON.stringify(obj, null, 2);
+          setStatus('Import depuis fichier réussi.', 'ok');
+        } catch (e) {
+          setStatus('Erreur de parsing du fichier : ' + e.message, 'err');
+        }
+      };
+      reader.onerror = () => setStatus('Impossible de lire le fichier.', 'err');
+      reader.readAsText(file);
+    }
+
+    function clearValues() {
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          const td = gridEl.rows[r].cells[c];
+          const input = td.querySelector('input');
+          if (!td.classList.contains('given')) {
+            input.value = '';
+          }
+        }
+      }
+      updateConflicts();
+      setStatus('Valeurs non « données » effacées.', 'ok');
+    }
+
+    function clearAll() {
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          const td = gridEl.rows[r].cells[c];
+          const input = td.querySelector('input');
+          input.value = '';
+          td.classList.remove('given');
+        }
+      }
+      jsonArea.value = '';
+      updateConflicts();
+      setStatus('Grille réinitialisée.', 'ok');
+    }
+
+    function loadExample() {
+      const example = {
+        values: [
+          [0,0,9,0,0,0,0,8,0],
+          [0,0,0,0,5,0,0,2,0],
+          [8,0,0,0,0,3,7,6,0],
+          [5,0,0,4,1,0,0,3,7],
+          [0,4,7,0,0,6,6,1,0], // volontairement un conflit pour montrer la surbrillance
+          [0,0,7,0,0,0,0,4,8],
+          [3,0,0,5,4,1,3,7,2], // volontairement un conflit pour montrer la surbrillance
+          [3,2,1,9,6,7,8,5,4],
+          [4,7,5,3,3,0,1,9,6]  // volontairement un conflit pour montrer la surbrillance
+        ].map(row => row.slice()),
+        givens: Array.from({length:9}, (_,r) => Array.from({length:9}, (_,c) => false))
+      };
+      setState(example);
+      jsonArea.value = JSON.stringify(example, null, 2);
+      setStatus('Exemple chargé (avec conflits pour démonstration).', 'warn');
+    }
+
+    // Event wiring
+    exportBtn.addEventListener('click', exportToTextarea);
+    importBtn.addEventListener('click', importFromTextarea);
+    copyBtn.addEventListener('click', async () => {
+      exportToTextarea();
+      try { await navigator.clipboard.writeText(jsonArea.value); setStatus('JSON copié dans le presse-papiers.', 'ok'); }
+      catch { setStatus('Impossible de copier dans le presse-papiers.', 'err'); }
+    });
+    exampleBtn.addEventListener('click', loadExample);
+
+    downloadBtn.addEventListener('click', downloadJSON);
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files && e.target.files[0];
+      if (file) importFromFile(file);
+      fileInput.value = '';
+    });
+
+    clearValuesBtn.addEventListener('click', clearValues);
+    clearAllBtn.addEventListener('click', clearAll);
+
+    // Init
+    buildGrid();
+    setStatus('Prêt — saisis des chiffres 1–9. Active « Mode Données » pour marquer les cases données.');
+  </script>
+</body>
+</html>

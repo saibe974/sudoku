@@ -24,6 +24,27 @@ const TECH_ORDER = () => {
 // Historique des états pour l’undo
 let stepHistory = [];
 
+function buildEmptyCandidates() {
+    return Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
+}
+
+// Compat legacy: certaines techniques utilisent encore les globals `gridEl` et `candidates`.
+function syncLegacyTechniqueGlobals() {
+    const state = getState();
+    window.gridEl = document.getElementById('grid');
+    window.candidates = Array.isArray(state.candidates) ? state.candidates : buildEmptyCandidates();
+}
+
+function persistLegacyTechniqueCandidates() {
+    if (!Array.isArray(window.candidates)) return;
+    const state = getState();
+    setState({
+        values: state.values,
+        givens: state.givens,
+        candidates: window.candidates
+    });
+}
+
 // Création d'une copie profonde de l'état courant
 function getDeepState() {
     return structuredClone(getState());
@@ -93,6 +114,7 @@ function populateTechniqueSelect() {
 function findNextStep() {
     // Nettoyer les candidats avant de chercher la prochaine étape
     cleanCandidates();
+    syncLegacyTechniqueGlobals();
 
     const techChoice = document.getElementById('techniqueSelect')?.value || 'auto';
 
@@ -139,6 +161,9 @@ function applyStep(step) {
     }
 
     tech.applier(step); // application
+
+    // Persist des modifications de candidats faites via globals legacy.
+    persistLegacyTechniqueCandidates();
 
     // Nettoyer les candidats après chaque application
     cleanCandidates();

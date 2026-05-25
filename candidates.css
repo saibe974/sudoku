@@ -1,0 +1,187 @@
+/* Styles pour l'affichage des candidats dans les cellules */
+
+.sudoku-grid td {
+    cursor: pointer;
+}
+
+.cell-input {
+    position: relative;
+    z-index: 2;
+}
+
+/* Affichage des candidats */
+.cell-candidates {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 0;
+    padding: 2px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.cand-digit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    opacity: 0.7;
+}
+
+.cand-digit.active {
+    color: var(--accent);
+    opacity: 1;
+}
+
+/* Highlights pour les techniques */
+.highlight {
+    background: rgba(96, 165, 250, 0.2) !important;
+}
+
+.highlight-eliminate {
+    background: rgba(239, 68, 68, 0.2) !important;
+}
+
+.highlight-place {
+    background: rgba(34, 197, 94, 0.2) !important;
+}
+
+/* Popover candidats */
+.cand-grid button {
+    width: 40px;
+    height: 40px;
+    font-weight: 600;
+}
+
+.cand-grid button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--panel);
+}
+
+/* Styles pour les explications */
+.explanation {
+    background: rgba(31, 41, 55, 0.5);
+    border: 1px solid var(--grid-2);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.technique-name {
+    font-size: 16px;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.technique-name.basic {
+    color: var(--ok);
+}
+
+.technique-name.intermediate {
+    color: var(--accent);
+}
+
+.technique-name.advanced {
+    color: var(--warn);
+}
+
+.technique-name.expert {
+    color: var(--err);
+}
+
+.technique-desc {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.explanation-video {
+    margin-top: 12px;
+}
+
+.video-container {
+    position: relative;
+    padding-bottom: 56.25%;
+    height: 0;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.video-container iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.hint-actions {
+    margin-top: 8px;
+}
+
+details summary {
+    cursor: pointer;
+    user-select: none;
+    padding: 8px 0;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+details summary:hover {
+    color: var(--accent-2);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .cand-digit {
+        font-size: 8px;
+    }
+
+    .cand-grid button {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .cand-digit {
+        font-size: 7px;
+    }
+
+    .cand-grid button {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+
+    .explanation {
+        padding: 10px;
+    }
+
+    .technique-name {
+        font-size: 14px;
+    }
+
+    .technique-desc {
+        font-size: 12px;
+    }
+}

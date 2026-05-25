@@ -13,8 +13,6 @@ define('MODE', 'debug'); // 'debug' or 'production'
   <link rel="stylesheet" href="style.css?<?= MODE == 'debug' ? date('dmyhs') : $version; ?>" />
   <link rel="stylesheet" href="candidates.css?<?= MODE == 'debug' ? date('dmyhs') : $version; ?>" />
   <script src="https://unpkg.com/lucide@latest"></script>
-  <script async src="https://docs.opencv.org/4.10.0/opencv.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -26,7 +24,6 @@ define('MODE', 'debug'); // 'debug' or 'production'
 
       <div class="toolbar">
   <label class="btn" for="fileInput"><i data-lucide="download"></i>Importer</label>
-      <label class="btn" for="photoInput" title="Importer une photo de grille Sudoku"><i data-lucide="scan"></i>Photo</label>
   <button class="btn" id="downloadBtn"><i data-lucide="upload"></i>Télécharger</button>
   <button class="btn" id="exampleBtn"><i data-lucide="wand-2"></i>Exemple</button>
       </div>
@@ -69,7 +66,6 @@ define('MODE', 'debug'); // 'debug' or 'production'
 
 
         <input style="display:none" type="file" id="fileInput" accept="application/json,.json" />
-        <input style="display:none" type="file" id="photoInput" accept="image/*" capture="environment" />
       </div>
 
 
@@ -80,63 +76,6 @@ define('MODE', 'debug'); // 'debug' or 'production'
       <div class="card-footer toolbar">
         
       </div>
-
-      <div id="photoPreviewPanel" class="photo-preview" hidden>
-        <div class="photo-preview-header">
-          <div class="photo-preview-title">Apercu photo avant OCR</div>
-          <div class="photo-preview-actions">
-            <button class="btn xs" id="photoCancelBtn" type="button">Annuler</button>
-            <button class="btn xs" id="photoNextStepBtn" type="button">Etape suivante</button>
-            <button class="btn xs primary" id="photoRunBtn" type="button">Lancer OCR</button>
-          </div>
-        </div>
-        <div class="photo-preview-frame" id="photoPreviewFrame">
-          <img id="photoPreviewImg" alt="Apercu de la photo importee" />
-          <div id="photoCornersOverlay" class="photo-corners-overlay" hidden>
-            <svg class="corner-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <polygon id="photoCornersPolygon" points="" />
-            </svg>
-            <span class="corner-marker" data-corner="0"></span>
-            <span class="corner-marker" data-corner="1"></span>
-            <span class="corner-marker" data-corner="2"></span>
-            <span class="corner-marker" data-corner="3"></span>
-          </div>
-        </div>
-
-        <div id="photoWarpPanel" class="photo-warp" hidden>
-          <div class="photo-preview-title">Image carree redressee</div>
-          <div class="photo-warp-controls" id="photoWarpControls">
-            <label class="warp-control" title="-100 assombrit, +100 eclaircit">
-              Luminosite
-              <input type="range" id="ocrBrightness" min="-100" max="100" value="0" />
-            </label>
-            <label class="warp-control" title="100 = neutre, plus grand = contraste plus fort">
-              Contraste
-              <input type="range" id="ocrContrast" min="50" max="220" value="130" />
-            </label>
-            <label class="warp-control" title="Taille de fenetre du seuil adaptatif (impair)">
-              Fenetre seuil
-              <input type="range" id="ocrBlockSize" min="9" max="41" step="2" value="15" />
-            </label>
-            <label class="warp-control" title="Compensation du seuil adaptatif">
-              Compensation C
-              <input type="range" id="ocrThresholdC" min="0" max="20" value="6" />
-            </label>
-            <label class="warp-control" title="Force du denoise (ouverture morphologique)">
-              Debruitage
-              <input type="range" id="ocrDenoise" min="0" max="3" value="1" />
-            </label>
-            <button class="btn xs" id="ocrResetTuningBtn" type="button">Reset reglages</button>
-            <button class="btn xs" id="ocrSaveTuningBtn" type="button">Enregistrer</button>
-          </div>
-          <div id="photoWarpSettingsMeta" class="photo-warp-meta"></div>
-          <div class="photo-warp-frame" id="photoWarpFrame">
-            <img id="photoWarpPreviewImg" alt="Apercu de la grille redressee" />
-            <div id="photoWarpGridOverlay" class="photo-warp-grid-overlay" hidden></div>
-          </div>
-        </div>
-      </div>
-
 
       
     </section>
