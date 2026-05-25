@@ -18,24 +18,28 @@ define('MODE', 'debug'); // 'debug' or 'production'
 </head>
 <body>
   <div class="container">
-    <header>
-      <div>
+    <header class="app-header">
+      <div class="brand-block">
         <h1>Seboku</h1>
         <div class="subtitle">Pour apprendre...</div>
       </div>
 
-      <div class="toolbar">
-  <label class="btn" for="fileInput"><i data-lucide="download"></i>Importer</label>
-      <label class="btn" for="photoInput" title="Importer une photo de grille Sudoku"><i data-lucide="scan"></i>Photo</label>
-  <button class="btn" id="downloadBtn"><i data-lucide="upload"></i>Télécharger</button>
-  <button class="btn" id="exampleBtn"><i data-lucide="wand-2"></i>Exemple</button>
+      <div class="header-actions-row" aria-label="Actions principales">
+        <button class="btn icon-btn burger-btn" id="burgerMenuBtn" type="button" title="Afficher/masquer les outils" aria-label="Afficher ou masquer les outils">
+          <i data-lucide="menu"></i>
+        </button>
+        <label class="btn icon-btn" for="fileInput" title="Importer JSON" aria-label="Importer JSON"><i data-lucide="download"></i></label>
+                <button class="btn icon-btn" id="downloadBtn" type="button" title="Télécharger" aria-label="Télécharger"><i data-lucide="upload"></i></button>
+<label class="btn icon-btn" for="photoInput" title="Importer une photo" aria-label="Importer une photo"><i data-lucide="camera"></i></label>
+        <button class="btn icon-btn" id="clearAllBtn" type="button" title="Nouvelle partie" aria-label="Nouvelle partie"><i data-lucide="file-plus"></i></button>
+        <button class="btn icon-btn" id="exampleBtn" type="button" title="Exemple" aria-label="Exemple"><i data-lucide="wand-2"></i></button>
       </div>
     </header>
 
 
-    <section class="card">
+    <section class="card card-grid">
 
-      <div class="card-header toolbar">
+      <div class="card-header toolbar" id="mainTools">
 
           <div>
             <label class="btn btn-with-color" title="Activer pour marquer/retirer une case comme donnée (indice de départ)">
@@ -51,7 +55,6 @@ define('MODE', 'debug'); // 'debug' or 'production'
           </div>
 
           <div>
-            <button class="btn" id="clearAllBtn" title="Tout remettre à zéro"><i data-lucide="file-plus"></i>Nouvelle grille</button>
             <button class="btn btn-with-color" id="clearValuesBtn" title="Efface seulement les valeurs (conserve les 'données')">
               <i data-lucide="eraser"></i>Effacer valeurs
               <input type="color" id="valueColorPicker" value="#e5e7eb" />
@@ -75,6 +78,12 @@ define('MODE', 'debug'); // 'debug' or 'production'
 
       <div class="grid-wrapper">
         <table class="sudoku-grid" aria-label="Grille Sudoku 9×9" id="grid"></table>
+        <div class="grid-play-menu" id="gridPlayMenu" hidden>
+          <button class="btn grid-play-btn" id="gridMenuValuesBtn" type="button"><i data-lucide="eye-off"></i>Valeurs</button>
+          <button class="btn grid-play-btn" id="gridMenuCandidatesBtn" type="button"><i data-lucide="grid-3x3"></i>Candidats</button>
+          <button class="btn grid-play-btn" id="gridMenuHintBtn" type="button"><i data-lucide="lightbulb"></i>Indice</button>
+          <button class="btn grid-play-btn" id="gridMenuSolveBtn" type="button"><i data-lucide="play"></i>Resolution</button>
+        </div>
       </div>
 
       <div class="card-footer toolbar">
@@ -86,6 +95,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
           <div class="photo-preview-title">Apercu photo avant OCR</div>
           <div class="photo-preview-actions">
             <button class="btn xs" id="photoCancelBtn" type="button">Annuler</button>
+            <button class="btn xs" id="photoPrevStepBtn" type="button" disabled>Etape precedente</button>
             <button class="btn xs" id="photoNextStepBtn" type="button">Etape suivante</button>
             <button class="btn xs primary" id="photoRunBtn" type="button">Lancer OCR</button>
           </div>
@@ -114,29 +124,36 @@ define('MODE', 'debug'); // 'debug' or 'production'
               Contraste
               <input type="range" id="ocrContrast" min="50" max="220" value="130" />
             </label>
-            <label class="warp-control" title="Taille de fenetre du seuil adaptatif (impair)">
-              Fenetre seuil
-              <input type="range" id="ocrBlockSize" min="9" max="41" step="2" value="15" />
-            </label>
-            <label class="warp-control" title="Compensation du seuil adaptatif">
-              Compensation C
-              <input type="range" id="ocrThresholdC" min="0" max="20" value="6" />
-            </label>
-            <label class="warp-control" title="Force du denoise (ouverture morphologique)">
-              Debruitage
-              <input type="range" id="ocrDenoise" min="0" max="3" value="1" />
-            </label>
-            <label class="warp-control" title="Blanchit les lignes detectees avant OCR pour mieux isoler les chiffres">
-              Nettoyage lignes
-              <input type="checkbox" id="ocrLineCleanup" checked />
-            </label>
-            <label class="warp-control" title="Force le recalcul des bordures du cadre depuis l'espacement des cellules internes">
-              Cadre strict
-              <input type="checkbox" id="ocrStrictBorder" checked />
-            </label>
-            <button class="btn xs" id="ocrResetTuningBtn" type="button">Reset reglages</button>
-            <button class="btn xs" id="ocrSaveTuningBtn" type="button">Enregistrer</button>
           </div>
+          <details class="photo-warp-advanced" id="photoWarpAdvanced">
+            <summary>Options avancees</summary>
+            <div class="photo-warp-advanced-grid">
+              <label class="warp-control" title="Taille de fenetre du seuil adaptatif (impair)">
+                Fenetre seuil
+                <input type="range" id="ocrBlockSize" min="9" max="41" step="2" value="15" />
+              </label>
+              <label class="warp-control" title="Compensation du seuil adaptatif">
+                Compensation C
+                <input type="range" id="ocrThresholdC" min="0" max="20" value="6" />
+              </label>
+              <label class="warp-control" title="Force du denoise (ouverture morphologique)">
+                Debruitage
+                <input type="range" id="ocrDenoise" min="0" max="3" value="1" />
+              </label>
+              <label class="warp-control warp-control-toggle" title="Blanchit les lignes detectees avant OCR pour mieux isoler les chiffres">
+                Nettoyage lignes
+                <input type="checkbox" id="ocrLineCleanup" checked />
+              </label>
+              <label class="warp-control warp-control-toggle" title="Force le recalcul des bordures du cadre depuis l'espacement des cellules internes">
+                Cadre strict
+                <input type="checkbox" id="ocrStrictBorder" checked />
+              </label>
+            </div>
+            <div class="photo-warp-advanced-actions">
+              <button class="btn xs" id="ocrResetTuningBtn" type="button">Reset reglages</button>
+              <button class="btn xs" id="ocrSaveTuningBtn" type="button">Enregistrer</button>
+            </div>
+          </details>
           <div id="photoWarpSettingsMeta" class="photo-warp-meta"></div>
           <div class="photo-warp-frame" id="photoWarpFrame">
             <img id="photoWarpPreviewImg" alt="Apercu de la grille redressee" />

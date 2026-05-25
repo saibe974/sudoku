@@ -438,6 +438,7 @@
     async function recognizeCellWithWorker(worker, sourceMat, rect, options = {}) {
         const minInkRatio = Math.max(0, Number(options.minInkRatio == null ? 0.015 : options.minInkRatio));
         const secondPass = !!options.secondPass;
+        const recognitionConfidence = Math.max(0, Number(options.recognitionConfidence == null ? 40 : options.recognitionConfidence));
 
         const roi = sourceMat.roi(rect);
         const binInv = new cv.Mat();
@@ -452,7 +453,10 @@
 
             cv.bitwise_not(binInv, bin);
             const baseResult = await worker.recognize(matToCanvas(bin));
-            let parsed = parseRecognizedDigit(baseResult);
+            const firstParsed = parseRecognizedDigit(baseResult);
+            const recognizedOnFirstPass = !!(firstParsed.digit >= 1 && firstParsed.digit <= 9 && firstParsed.confidence >= recognitionConfidence);
+            let parsed = firstParsed;
+            let usedSecondPass = false;
 
             if ((!parsed.digit || parsed.confidence < 45) && secondPass) {
                 const upscaled = new cv.Mat();
@@ -465,6 +469,7 @@
                     const secondParsed = parseRecognizedDigit(secondResult);
                     if (secondParsed.digit && secondParsed.confidence >= parsed.confidence) {
                         parsed = secondParsed;
+                        usedSecondPass = true;
                     }
                 } finally {
                     kernel.delete();
@@ -477,7 +482,9 @@
                 digit: parsed.digit >= 1 && parsed.digit <= 9 ? parsed.digit : 0,
                 confidence: parsed.confidence || 0,
                 inkRatio,
-                skippedByInkFilter: false
+                skippedByInkFilter: false,
+                recognizedOnFirstPass,
+                usedSecondPass
             };
         } finally {
             roi.delete();
@@ -536,10 +543,20 @@
     async function recognizeGrid(warpedGray, options = {}) {
         const size = Number(options.size || 9);
         const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+        const recognitionConfidence = Math.max(0, Number(options.recognitionConfidence == null ? 40 : options.recognitionConfidence));
+        const highInkRatio = Math.max(0, Number(options.highInkRatio == null ? 0.06 : options.highInkRatio));
 
         const values = Array.from({ length: size }, () => Array(size).fill(0));
         const givens = Array.from({ length: size }, () => Array(size).fill(false));
         const candidates = Array.from({ length: size }, () => Array.from({ length: size }, () => []));
+        const analysis = Array.from({ length: size }, () => Array.from({ length: size }, () => ({
+            inkRatio: 0,
+            confidence: 0,
+            firstPassHit: false,
+            highInkNoDigit: false,
+            usedSecondPass: false,
+            skippedByInkFilter: false
+        })));
 
         const worker = await window.Tesseract.createWorker('eng');
         const psmSingleChar = (window.Tesseract.PSM && window.Tesseract.PSM.SINGLE_CHAR) ? window.Tesseract.PSM.SINGLE_CHAR : 10;
@@ -566,10 +583,20 @@
                     const rect = getCellRect(sourceMat, r, c, size, geometry);
                     const result = await recognizeCellWithWorker(worker, sourceMat, rect, {
                         minInkRatio: options.minInkRatio,
-                        secondPass: !!options.gridSecondPass
+                        secondPass: !!options.gridSecondPass,
+                        recognitionConfidence
                     });
 
-                    if (result.digit >= 1 && result.digit <= 9 && result.confidence >= 40) {
+                    analysis[r][c] = {
+                        inkRatio: Number(result.inkRatio || 0),
+                        confidence: Number(result.confidence || 0),
+                        firstPassHit: !!result.recognizedOnFirstPass,
+                        highInkNoDigit: !result.digit && !result.skippedByInkFilter && Number(result.inkRatio || 0) >= highInkRatio,
+                        usedSecondPass: !!result.usedSecondPass,
+                        skippedByInkFilter: !!result.skippedByInkFilter
+                    };
+
+                    if (result.digit >= 1 && result.digit <= 9 && result.confidence >= recognitionConfidence) {
                         values[r][c] = result.digit;
                         givens[r][c] = true;
                     }
@@ -584,7 +611,7 @@
             if (cleanedForOcr) cleanedForOcr.delete();
         }
 
-        return { values, givens, candidates };
+        return { values, givens, candidates, analysis };
     }
 
     async function importFromPhoto(options) {

@@ -32,6 +32,11 @@
     opacity: 0.7;
 }
 
+body.theme-light .cand-digit {
+    color: #4b5563;
+    opacity: 0.9;
+}
+
 .cand-digit.active {
     color: var(--accent);
     opacity: 1;

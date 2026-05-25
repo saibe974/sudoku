@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const SIZE = 9;
 
     const gridEl = document.getElementById('grid');
+    const gridWrapperEl = document.querySelector('.grid-wrapper');
     const givenModeEl = document.getElementById('givenMode');
     const statusEl = document.getElementById('status');
 
@@ -10,10 +11,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const photoInput = document.getElementById('photoInput');
     const photoPreviewPanelEl = document.getElementById('photoPreviewPanel');
     const photoPreviewImgEl = document.getElementById('photoPreviewImg');
+    const photoPreviewFrameEl = document.getElementById('photoPreviewFrame');
     const photoCornersOverlayEl = document.getElementById('photoCornersOverlay');
     const photoCornersPolygonEl = document.getElementById('photoCornersPolygon');
     const overlayNumpadEl = document.getElementById('overlayNumpad');
     const photoNextStepBtn = document.getElementById('photoNextStepBtn');
+    const photoPrevStepBtn = document.getElementById('photoPrevStepBtn');
     const photoRunBtn = document.getElementById('photoRunBtn');
     const photoCancelBtn = document.getElementById('photoCancelBtn');
     const photoWarpPanelEl = document.getElementById('photoWarpPanel');
@@ -33,21 +36,36 @@ document.addEventListener('DOMContentLoaded', function () {
     const exampleBtn = document.getElementById('exampleBtn');
     const clearAllBtn = document.getElementById('clearAllBtn');
     const clearValuesBtn = document.getElementById('clearValuesBtn');
+    const gridPlayMenuEl = document.getElementById('gridPlayMenu');
+    const gridMenuValuesBtn = document.getElementById('gridMenuValuesBtn');
+    const gridMenuCandidatesBtn = document.getElementById('gridMenuCandidatesBtn');
+    const gridMenuHintBtn = document.getElementById('gridMenuHintBtn');
+    const gridMenuSolveBtn = document.getElementById('gridMenuSolveBtn');
+    const toggleCandidatesBtn = document.getElementById('toggleCandidatesBtn');
+    const toggleValuesBtn = document.getElementById('toggleValuesBtn');
+    const hintBtn = document.getElementById('hintBtn');
+    const nextStepBtn = document.getElementById('nextStepBtn');
+    const burgerMenuBtn = document.getElementById('burgerMenuBtn');
+    const mainToolsEl = document.getElementById('mainTools');
 
     let pendingPhotoFile = null;
     let pendingPhotoUrl = null;
     let pendingPhotoCornerRatios = null;
     let pendingWarpValues = null;
+    let pendingWarpAnalysis = null;
     let pendingWarpGrayBase = null;
     let pendingWarpGeometry = null;
     let overlayCellOcrInProgress = false;
     let overlayNumpadTarget = null;
     let dragCornerIndex = -1;
     let hasManualCornerEdits = false;
+    let usingFallbackCorners = false;
     let photoImportInProgress = false;
     let statusHideTimer = null;
 
     const STATUS_AUTO_HIDE_MS = 4000;
+    const MOBILE_BREAKPOINT = 768;
+    const LIGHT_THEME_BREAKPOINT = 980;
 
     const DEFAULT_OCR_TUNING = {
         brightness: 0,
@@ -75,10 +93,55 @@ document.addEventListener('DOMContentLoaded', function () {
         }, STATUS_AUTO_HIDE_MS);
     }
 
+    function applyThemeByWidth() {
+        const useLight = window.innerWidth <= LIGHT_THEME_BREAKPOINT;
+        document.body.classList.toggle('theme-light', useLight);
+        document.body.classList.toggle('theme-dark', !useLight);
+    }
+
+    function syncMobileToolsState() {
+        const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+        if (!isMobile) {
+            document.body.classList.remove('mobile-tools-open');
+        }
+
+        if (mainToolsEl) {
+            const open = !isMobile || document.body.classList.contains('mobile-tools-open');
+            mainToolsEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+        }
+
+        if (burgerMenuBtn) {
+            const expanded = isMobile && document.body.classList.contains('mobile-tools-open');
+            burgerMenuBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        }
+    }
+
     function callCandidatesRender() {
         if (window.SudokuUI && typeof window.SudokuUI.reRender === 'function') {
             window.SudokuUI.reRender();
         }
+    }
+
+    function setGridPlayMenuVisible(visible) {
+        if (!gridPlayMenuEl) return;
+        gridPlayMenuEl.hidden = !visible;
+    }
+
+    function computeGridHasValues(values) {
+        if (!Array.isArray(values) || values.length !== SIZE) return false;
+        for (let r = 0; r < SIZE; r++) {
+            if (!Array.isArray(values[r])) continue;
+            for (let c = 0; c < SIZE; c++) {
+                const v = Number(values[r][c] || 0);
+                if (v >= 1 && v <= 9) return true;
+            }
+        }
+        return false;
+    }
+
+    function refreshGridPlayMenuVisibility() {
+        const state = getState();
+        setGridPlayMenuVisible(computeGridHasValues(state.values));
     }
 
     function buildGrid() {
@@ -233,6 +296,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         updateConflicts();
         callCandidatesRender();
+        setGridPlayMenuVisible(computeGridHasValues(values));
     }
 
     function updateConflicts() {
@@ -317,6 +381,8 @@ document.addEventListener('DOMContentLoaded', function () {
         pendingPhotoFile = null;
         pendingPhotoCornerRatios = null;
         pendingWarpValues = null;
+        pendingWarpAnalysis = null;
+        usingFallbackCorners = false;
         hasManualCornerEdits = false;
         dragCornerIndex = -1;
         if (pendingPhotoUrl) {
@@ -328,12 +394,28 @@ document.addEventListener('DOMContentLoaded', function () {
             photoPreviewImgEl.removeAttribute('src');
         }
 
+        if (photoPreviewFrameEl) {
+            photoPreviewFrameEl.hidden = false;
+        }
+
         if (photoPreviewPanelEl) {
             photoPreviewPanelEl.hidden = true;
         }
 
+        if (photoPrevStepBtn) {
+            photoPrevStepBtn.disabled = true;
+        }
+        if (photoNextStepBtn) {
+            photoNextStepBtn.disabled = false;
+        }
+
+        if (gridWrapperEl) {
+            gridWrapperEl.hidden = false;
+        }
+
         if (photoCornersOverlayEl) {
             photoCornersOverlayEl.hidden = true;
+            photoCornersOverlayEl.classList.remove('fallback-corners');
             photoCornersOverlayEl.querySelectorAll('.corner-marker').forEach((m) => m.classList.remove('dragging'));
         }
 
@@ -365,13 +447,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
         pendingPhotoFile = file;
         pendingPhotoUrl = URL.createObjectURL(file);
+        usingFallbackCorners = false;
 
         if (photoPreviewImgEl) {
             photoPreviewImgEl.src = pendingPhotoUrl;
         }
 
+        if (photoPreviewFrameEl) {
+            photoPreviewFrameEl.hidden = false;
+        }
+
         if (photoPreviewPanelEl) {
             photoPreviewPanelEl.hidden = false;
+        }
+
+        if (photoPrevStepBtn) {
+            photoPrevStepBtn.disabled = true;
+        }
+        if (photoNextStepBtn) {
+            photoNextStepBtn.disabled = false;
+        }
+
+        if (gridWrapperEl) {
+            gridWrapperEl.hidden = true;
         }
 
         if (photoCornersOverlayEl) {
@@ -392,6 +490,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function clearWarpPreview() {
         hideOverlayNumpad();
         pendingWarpValues = null;
+        pendingWarpAnalysis = null;
         pendingWarpGeometry = null;
         if (photoWarpPreviewImgEl) {
             photoWarpPreviewImgEl.removeAttribute('src');
@@ -591,12 +690,13 @@ document.addEventListener('DOMContentLoaded', function () {
         syncWarpOverlaySize();
     }
 
-    function renderWarpGridOverlay(values) {
+    function renderWarpGridOverlay(values, analysis) {
         if (!photoWarpGridOverlayEl) return;
         if (!Array.isArray(values) || values.length !== SIZE) {
             photoWarpGridOverlayEl.hidden = true;
             photoWarpGridOverlayEl.innerHTML = '';
             pendingWarpValues = null;
+            pendingWarpAnalysis = null;
             return;
         }
 
@@ -604,12 +704,21 @@ document.addEventListener('DOMContentLoaded', function () {
             const n = Number(v || 0);
             return (n >= 1 && n <= 9) ? n : 0;
         }));
+        pendingWarpAnalysis = Array.isArray(analysis) && analysis.length === SIZE
+            ? analysis.map((row) => Array.isArray(row) ? row.map((cell) => cell || {}) : Array.from({ length: SIZE }, () => ({})))
+            : Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => ({})));
 
         photoWarpGridOverlayEl.innerHTML = '';
         for (let r = 0; r < SIZE; r++) {
             for (let c = 0; c < SIZE; c++) {
                 const cell = document.createElement('div');
                 cell.className = 'warp-grid-cell';
+                const cellAnalysis = pendingWarpAnalysis[r] && pendingWarpAnalysis[r][c] ? pendingWarpAnalysis[r][c] : null;
+                if (cellAnalysis && cellAnalysis.firstPassHit) {
+                    cell.classList.add('warp-recognized-first-pass');
+                } else if (cellAnalysis && cellAnalysis.highInkNoDigit) {
+                    cell.classList.add('warp-high-ink-unrecognized');
+                }
                 if ((c + 1) % 3 === 0 && c !== SIZE - 1) {
                     cell.classList.add('warp-block-right');
                 }
@@ -633,6 +742,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     const clean = (input.value || '').replace(/[^1-9]/g, '').slice(0, 1);
                     input.value = clean;
                     pendingWarpValues[r][c] = clean ? Number(clean) : 0;
+                    cell.classList.remove('warp-high-ink-unrecognized');
+                    if (!clean) {
+                        cell.classList.remove('warp-recognized-validated');
+                    }
                 });
 
                 input.addEventListener('keydown', (e) => {
@@ -640,6 +753,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (input.value !== '') {
                         input.value = '';
                         pendingWarpValues[r][c] = 0;
+                        cell.classList.remove('warp-recognized-first-pass');
+                        cell.classList.remove('warp-recognized-validated');
                         e.preventDefault();
                     }
                 });
@@ -698,9 +813,23 @@ document.addEventListener('DOMContentLoaded', function () {
             if (result && result.digit >= 1 && result.digit <= 9) {
                 pendingWarpValues[row][col] = result.digit;
                 inputEl.value = String(result.digit);
-                setStatus('Cellule [' + (row + 1) + ',' + (col + 1) + '] reconnue: ' + result.digit
-                    + ' (conf ' + Math.round(Number(result.confidence || 0)) + '%).', 'ok');
+                const cellEl = inputEl.closest('.warp-grid-cell');
+                if (cellEl) {
+                    cellEl.classList.remove('warp-high-ink-unrecognized');
+                    cellEl.classList.remove('warp-recognized-validated');
+                }
+                setStatus('Cellule [' + (row + 1) + ',' + (col + 1) + '] proposee: ' + result.digit
+                    + ' (conf ' + Math.round(Number(result.confidence || 0)) + '%). Valide ou corrige via le pave numerique.', 'ok');
+                showOverlayNumpad(row, col, inputEl);
                 return;
+            }
+
+            if (inputEl) {
+                const cellEl = inputEl.closest('.warp-grid-cell');
+                if (cellEl) {
+                    cellEl.classList.toggle('warp-high-ink-unrecognized', Number(result && result.inkRatio || 0) >= 0.06 && !(result && result.skippedByInkFilter));
+                    cellEl.classList.remove('warp-recognized-first-pass');
+                }
             }
 
             if (result && result.skippedByInkFilter) {
@@ -723,6 +852,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!overlayNumpadEl || !inputEl) return;
         overlayNumpadTarget = { row, col, inputEl };
 
+        const selectedDigit = Number((inputEl.value || '').trim() || 0);
+        overlayNumpadEl.querySelectorAll('button[data-digit]').forEach((buttonEl) => {
+            const digit = Number(buttonEl.getAttribute('data-digit'));
+            buttonEl.classList.toggle('active', digit === selectedDigit && selectedDigit >= 1 && selectedDigit <= 9);
+        });
+
         overlayNumpadEl.hidden = false;
         const rect = inputEl.getBoundingClientRect();
         const padRect = overlayNumpadEl.getBoundingClientRect();
@@ -743,6 +878,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function hideOverlayNumpad() {
         if (!overlayNumpadEl) return;
+        overlayNumpadEl.querySelectorAll('button[data-digit].active').forEach((buttonEl) => {
+            buttonEl.classList.remove('active');
+        });
         overlayNumpadEl.hidden = true;
         overlayNumpadTarget = null;
     }
@@ -768,6 +906,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderPreviewCorners() {
         if (!photoCornersOverlayEl || !photoPreviewImgEl) return;
+        photoCornersOverlayEl.classList.toggle('fallback-corners', usingFallbackCorners);
         if (!pendingPhotoCornerRatios || pendingPhotoCornerRatios.length !== 4) {
             photoCornersOverlayEl.hidden = true;
             if (photoCornersPolygonEl) photoCornersPolygonEl.setAttribute('points', '');
@@ -814,11 +953,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function getImageBoundaryCorners(imageWidth, imageHeight) {
         if (!imageWidth || !imageHeight) return null;
+        const maxInsetX = Math.max(0, Math.floor((imageWidth - 2) / 4));
+        const maxInsetY = Math.max(0, Math.floor((imageHeight - 2) / 4));
+        const insetX = Math.min(50, maxInsetX);
+        const insetY = Math.min(50, maxInsetY);
+
+        const left = insetX;
+        const right = Math.max(left + 1, imageWidth - 1 - insetX);
+        const top = insetY;
+        const bottom = Math.max(top + 1, imageHeight - 1 - insetY);
+
         return [
-            { x: 0, y: 0 },
-            { x: imageWidth - 1, y: 0 },
-            { x: imageWidth - 1, y: imageHeight - 1 },
-            { x: 0, y: imageHeight - 1 }
+            { x: left, y: top },
+            { x: right, y: top },
+            { x: right, y: bottom },
+            { x: left, y: bottom }
         ];
     }
 
@@ -900,23 +1049,26 @@ document.addEventListener('DOMContentLoaded', function () {
                     await getPictureApi().ensureCvReady();
                     const detected = getPictureApi().detectSudokuCorners(img);
                     if (detected.points) {
+                        usingFallbackCorners = false;
                         setPreviewCornersFromPoints(detected.points, detected.imageWidth, detected.imageHeight);
                         hasManualCornerEdits = false;
                         setStatus('Photo chargee. Les 4 coins detectes sont affiches.', 'ok');
                     } else {
+                        usingFallbackCorners = true;
                         const fallback = getImageBoundaryCorners(detected.imageWidth, detected.imageHeight);
                         setPreviewCornersFromPoints(fallback, detected.imageWidth, detected.imageHeight);
                         hasManualCornerEdits = true;
-                        setStatus('Coins non detectes: coins places aux 4 bords de l\'image. Ajuste-les manuellement puis clique sur Etape suivante.', 'warn');
+                        setStatus('Coins non detectes: coins de secours affiches en rouge. Ajuste-les manuellement puis clique sur Etape suivante.', 'warn');
                     }
                 })
                 .catch(() => {
+                    usingFallbackCorners = true;
                     const w = Number(photoPreviewImgEl && photoPreviewImgEl.naturalWidth ? photoPreviewImgEl.naturalWidth : 0);
                     const h = Number(photoPreviewImgEl && photoPreviewImgEl.naturalHeight ? photoPreviewImgEl.naturalHeight : 0);
                     const fallback = getImageBoundaryCorners(w, h);
                     setPreviewCornersFromPoints(fallback, w, h);
                     hasManualCornerEdits = true;
-                    setStatus('Detection des coins indisponible: coins places aux 4 bords pour ajustement manuel.', 'warn');
+                    setStatus('Detection des coins indisponible: coins de secours affiches en rouge pour ajustement manuel.', 'warn');
                 });
         });
     }
@@ -939,6 +1091,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (photoWarpPanelEl) {
                     photoWarpPanelEl.hidden = false;
                 }
+                if (photoPreviewFrameEl) {
+                    photoPreviewFrameEl.hidden = true;
+                }
+                if (photoPrevStepBtn) {
+                    photoPrevStepBtn.disabled = false;
+                }
+                photoNextStepBtn.disabled = true;
 
                 initOcrTuningControls();
                 updateWarpSettingsMeta();
@@ -958,6 +1117,27 @@ document.addEventListener('DOMContentLoaded', function () {
             } catch (err) {
                 setStatus('Echec etape suivante : ' + err.message, 'err');
             }
+        });
+    }
+
+    if (photoPrevStepBtn) {
+        photoPrevStepBtn.addEventListener('click', () => {
+            if (!pendingPhotoFile) {
+                setStatus('Aucune photo a traiter.', 'warn');
+                return;
+            }
+
+            clearWarpPreview();
+            if (photoPreviewFrameEl) {
+                photoPreviewFrameEl.hidden = false;
+            }
+            renderPreviewCorners();
+
+            photoPrevStepBtn.disabled = true;
+            if (photoNextStepBtn) {
+                photoNextStepBtn.disabled = false;
+            }
+            setStatus('Retour a l\'etape precedente. Ajuste les coins puis clique sur Etape suivante.', 'ok');
         });
     }
 
@@ -998,7 +1178,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     } finally {
                         bwForOcr.delete();
                     }
-                    renderWarpGridOverlay(ocrState.values);
+                    renderWarpGridOverlay(ocrState.values, ocrState.analysis);
                     setStatus('OCR termine. Corrige la grille superposee puis reclique sur Lancer OCR pour importer.', 'ok');
                 } catch (err) {
                     setStatus('Echec OCR : ' + err.message, 'err');
@@ -1045,6 +1225,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (digit >= 1 && digit <= 9) {
                     pendingWarpValues[overlayNumpadTarget.row][overlayNumpadTarget.col] = digit;
                     overlayNumpadTarget.inputEl.value = String(digit);
+                    const cellEl = overlayNumpadTarget.inputEl.closest('.warp-grid-cell');
+                    if (cellEl) {
+                        cellEl.classList.remove('warp-high-ink-unrecognized');
+                        cellEl.classList.add('warp-recognized-validated');
+                    }
                     setStatus('Valeur saisie manuellement pour ['
                         + (overlayNumpadTarget.row + 1) + ',' + (overlayNumpadTarget.col + 1) + '] : ' + digit + '.', 'ok');
                 }
@@ -1057,6 +1242,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (action === 'clear') {
                     pendingWarpValues[overlayNumpadTarget.row][overlayNumpadTarget.col] = 0;
                     overlayNumpadTarget.inputEl.value = '';
+                    const cellEl = overlayNumpadTarget.inputEl.closest('.warp-grid-cell');
+                    if (cellEl) {
+                        cellEl.classList.remove('warp-recognized-validated');
+                        cellEl.classList.remove('warp-recognized-first-pass');
+                    }
                     setStatus('Cellule [' + (overlayNumpadTarget.row + 1) + ',' + (overlayNumpadTarget.col + 1)
                         + '] videe manuellement.', 'ok');
                 }
@@ -1191,6 +1381,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             updateConflicts();
             callCandidatesRender();
+            refreshGridPlayMenuVisibility();
             setStatus('Valeurs effacees (hors donnees).', 'ok');
         });
     }
@@ -1209,7 +1400,40 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             updateConflicts();
             callCandidatesRender();
+            setGridPlayMenuVisible(false);
             setStatus('Grille reinitialisee.', 'ok');
+        });
+    }
+
+    if (gridMenuCandidatesBtn) {
+        gridMenuCandidatesBtn.addEventListener('click', () => {
+            if (toggleCandidatesBtn) toggleCandidatesBtn.click();
+        });
+    }
+
+    if (gridMenuValuesBtn) {
+        gridMenuValuesBtn.addEventListener('click', () => {
+            if (toggleValuesBtn) toggleValuesBtn.click();
+        });
+    }
+
+    if (gridMenuHintBtn) {
+        gridMenuHintBtn.addEventListener('click', () => {
+            if (hintBtn) hintBtn.click();
+        });
+    }
+
+    if (gridMenuSolveBtn) {
+        gridMenuSolveBtn.addEventListener('click', () => {
+            if (nextStepBtn) nextStepBtn.click();
+        });
+    }
+
+    if (burgerMenuBtn) {
+        burgerMenuBtn.addEventListener('click', () => {
+            if (window.innerWidth > MOBILE_BREAKPOINT) return;
+            document.body.classList.toggle('mobile-tools-open');
+            syncMobileToolsState();
         });
     }
 
@@ -1219,7 +1443,11 @@ document.addEventListener('DOMContentLoaded', function () {
     window.setStatus = setStatus;
     window.renderAllCells = renderAllCells;
 
+    applyThemeByWidth();
+    syncMobileToolsState();
+
     buildGrid();
+    setGridPlayMenuVisible(false);
     setStatus('Pret.');
 
     if (photoPreviewImgEl) {
@@ -1230,10 +1458,15 @@ document.addEventListener('DOMContentLoaded', function () {
         photoWarpPreviewImgEl.addEventListener('load', syncWarpOverlaySize);
     }
 
-    window.addEventListener('resize', renderPreviewCorners);
-    window.addEventListener('resize', syncWarpOverlaySize);
+    window.addEventListener('resize', () => {
+        applyThemeByWidth();
+        syncMobileToolsState();
+        renderPreviewCorners();
+        syncWarpOverlaySize();
+    });
 
     if (typeof lucide !== 'undefined' && lucide.createIcons) {
         lucide.createIcons();
     }
+
 });
