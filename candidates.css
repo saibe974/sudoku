@@ -69,12 +69,26 @@ body.theme-light .cand-digit {
 }
 
 /* Styles pour les explications */
+.right-panel #explanations {
+    display: block;
+    width: 100%;
+    padding: 0;
+}
+
 .explanation {
-    background: rgba(31, 41, 55, 0.5);
+    width: 100%;
+    background: linear-gradient(180deg, rgba(17, 24, 39, 0.95) 0%, rgba(11, 18, 32, 0.95) 100%);
     border: 1px solid var(--grid-2);
-    border-radius: 8px;
-    padding: 12px;
+    border-radius: 12px;
+    padding: 14px;
     margin-bottom: 12px;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+body.theme-light .explanation {
+    background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+    border-color: #c9d8ef;
+    box-shadow: 0 8px 18px rgba(20, 40, 90, 0.1);
 }
 
 .technique-name {
@@ -100,7 +114,8 @@ body.theme-light .cand-digit {
 }
 
 .technique-desc {
-    color: var(--muted);
+    color: var(--text);
+    opacity: 0.9;
     font-size: 14px;
     line-height: 1.5;
 }

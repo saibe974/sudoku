@@ -52,6 +52,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
           
           <div>
             <button class="btn" id="toggleCandidatesBtn" title="Afficher/Masquer/Régénérer les candidats"><i data-lucide="grid-3x3"></i>Afficher candidats</button>
+            <button class="btn" id="sanitizeCandidatesBtn" title="Nettoyer les candidats invalides (ligne, colonne, bloc)"><i data-lucide="filter"></i>Nettoyer candidats</button>
           </div>
 
           <div>
@@ -90,10 +91,11 @@ define('MODE', 'debug'); // 'debug' or 'production'
           <button class="btn mobile-digit-btn" type="button" data-digit="9">9</button>
         </div>
         <div class="grid-play-menu" id="gridPlayMenu" hidden>
-          <button class="btn grid-play-btn" id="gridMenuValuesBtn" type="button"><i data-lucide="eye-off"></i>Valeurs</button>
-          <button class="btn grid-play-btn" id="gridMenuCandidatesBtn" type="button"><i data-lucide="grid-3x3"></i>Candidats</button>
-          <button class="btn grid-play-btn" id="gridMenuHintBtn" type="button"><i data-lucide="lightbulb"></i>Indice</button>
-          <button class="btn grid-play-btn" id="gridMenuSolveBtn" type="button"><i data-lucide="play"></i>Resolution</button>
+          <button class="btn grid-play-btn" id="gridMenuValuesBtn" type="button" title="Afficher/masquer les valeurs" aria-label="Afficher ou masquer les valeurs"><i data-lucide="eye-off"></i></button>
+          <button class="btn grid-play-btn" id="gridMenuCandidatesBtn" type="button" title="Afficher/masquer les candidats" aria-label="Afficher ou masquer les candidats"><i data-lucide="grid-3x3"></i></button>
+          <button class="btn grid-play-btn" id="gridMenuSanitizeBtn" type="button" title="Nettoyer les candidats invalides" aria-label="Nettoyer les candidats"><i data-lucide="filter"></i></button>
+          <button class="btn grid-play-btn" id="gridMenuHintBtn" type="button" title="Proposer un indice" aria-label="Indice"><i data-lucide="lightbulb"></i></button>
+          <button class="btn grid-play-btn" id="gridMenuSolveBtn" type="button" title="Appliquer un pas de resolution" aria-label="Resolution"><i data-lucide="play"></i></button>
         </div>
       </div>
 
@@ -180,6 +182,20 @@ define('MODE', 'debug'); // 'debug' or 'production'
 
     <aside class="card right-panel">
       <h3 style="margin-top:0">Explications :</h3>
+      <div class="explanations-menu" aria-label="Navigation des explications">
+        <button class="btn xs" id="explanationsPrevBtn" type="button" title="Voir l'explication précédente" aria-label="Explication précédente" disabled>
+          <i data-lucide="chevron-up"></i>
+          Précédent
+        </button>
+        <button class="btn xs" id="explanationsNextBtn" type="button" title="Voir l'explication suivante" aria-label="Explication suivante" disabled>
+          <i data-lucide="chevron-down"></i>
+          Suivant
+        </button>
+        <button class="btn xs" id="explanationsClearBtn" type="button" title="Effacer la liste des explications" aria-label="Effacer la liste des explications" disabled>
+          <i data-lucide="trash-2"></i>
+          Effacer
+        </button>
+      </div>
       <!-- <div class="meta">Tu peux coller/éditer ici. Format :
         <code>{"values": number[9][9], "givens": boolean[9][9], "candidates": number[][][]}</code>
       </div>

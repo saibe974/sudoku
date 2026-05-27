@@ -40,8 +40,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const mobileGridDigitsEl = document.getElementById('mobileGridDigits');
     const gridMenuValuesBtn = document.getElementById('gridMenuValuesBtn');
     const gridMenuCandidatesBtn = document.getElementById('gridMenuCandidatesBtn');
+    const gridMenuSanitizeBtn = document.getElementById('gridMenuSanitizeBtn');
     const gridMenuHintBtn = document.getElementById('gridMenuHintBtn');
     const gridMenuSolveBtn = document.getElementById('gridMenuSolveBtn');
+    const sanitizeCandidatesBtn = document.getElementById('sanitizeCandidatesBtn');
     const toggleCandidatesBtn = document.getElementById('toggleCandidatesBtn');
     const toggleValuesBtn = document.getElementById('toggleValuesBtn');
     const hintBtn = document.getElementById('hintBtn');
@@ -1484,6 +1486,16 @@ document.addEventListener('DOMContentLoaded', function () {
     if (gridMenuHintBtn) {
         gridMenuHintBtn.addEventListener('click', () => {
             if (hintBtn) hintBtn.click();
+        });
+    }
+
+    if (gridMenuSanitizeBtn) {
+        gridMenuSanitizeBtn.addEventListener('click', () => {
+            if (sanitizeCandidatesBtn) {
+                sanitizeCandidatesBtn.click();
+            } else if (typeof window.sanitizeCandidates === 'function') {
+                window.sanitizeCandidates();
+            }
         });
     }
 

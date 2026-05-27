@@ -99,7 +99,7 @@ header {
     flex-wrap: nowrap;
     align-items: center;
     gap: 8px;
-    overflow-x: auto;
+    overflow-x: hidden;
     padding-bottom: 2px;
 }
 
@@ -134,6 +134,7 @@ h1 {
 
 h3 {
     color: var(--text);
+    margin-bottom: 8px;
 }
 
 .subtitle {
@@ -182,23 +183,43 @@ h3 {
 .grid-play-menu {
     margin-top: 10px;
     padding: 0 8px 12px;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    overflow-x: hidden;
     gap: 8px;
 }
 
+.grid-play-menu .btn {
+    flex: 0 0 auto;
+}
+
 .grid-play-btn {
-    width: 100%;
+    width: auto;
+    height: 40px;
+    padding: 0 12px;
     justify-content: center;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.grid-play-btn i {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.4;
+    flex: 0 0 auto;
 }
 
 .mobile-grid-digits {
     display: none;
+    width: 100%;
 }
 
 .mobile-digit-btn {
     min-width: 0;
     justify-content: center;
+    width: 100%;
 }
 
 body.theme-light .grid-play-menu {
@@ -401,6 +422,37 @@ label.btn input[type="checkbox"] {
 .right-panel {
     max-height: calc(100vh - 140px);
     overflow-y: auto;
+}
+
+.explanations-menu {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-bottom: 10px;
+    width: 100%;
+}
+
+.explanations-menu .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+    justify-content: center;
+    gap: 6px;
+}
+
+.explanations-menu .btn i {
+    width: 14px;
+    height: 14px;
+}
+
+#explanations .explanation.explanation-current {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.4), 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+body.theme-light #explanations .explanation.explanation-current {
+    border-color: #1d4ed8;
+    box-shadow: 0 0 0 1px rgba(29, 78, 216, 0.24), 0 8px 18px rgba(20, 40, 90, 0.1);
 }
 
 .right-panel textarea {
@@ -1012,16 +1064,22 @@ body.theme-light .warp-grid-cell.warp-high-ink-unrecognized {
 
     .grid-play-menu {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         overflow: hidden;
         gap: 6px;
         padding: 0 6px 10px;
         width: 100%;
     }
 
-    .grid-play-btn {
+    .grid-play-menu .btn {
+        flex: initial;
         min-width: 0;
-        padding: 8px 0;
+    }
+
+    .grid-play-btn {
+        width: auto;
+        height: 40px;
+        padding: 0;
         font-size: 0;
         line-height: 0;
         gap: 0;
@@ -1094,6 +1152,15 @@ body.theme-light .warp-grid-cell.warp-high-ink-unrecognized {
     .right-panel textarea {
         min-height: 200px;
         font-size: 13px;
+    }
+
+    .explanations-menu {
+        gap: 6px;
+    }
+
+    .explanations-menu .btn {
+        padding: 6px 8px;
+        font-size: 11px;
     }
 
     .grid-footer {
@@ -1204,6 +1271,10 @@ body.theme-light .warp-grid-cell.warp-high-ink-unrecognized {
 
     .right-panel h3 {
         font-size: 16px;
+    }
+
+    .explanations-menu .btn {
+        flex: 1 1 0;
     }
 
     .meta {

@@ -23,6 +23,98 @@ const TECH_ORDER = () => {
 
 // Historique des états pour l’undo
 let stepHistory = [];
+let explanationCursor = -1;
+
+function getExplanationElements() {
+    const explanationsDiv = document.getElementById('explanations');
+    if (!explanationsDiv) return [];
+    return Array.from(explanationsDiv.querySelectorAll('.explanation'));
+}
+
+function focusExplanation(index, { smooth = true } = {}) {
+    const items = getExplanationElements();
+    if (items.length === 0) {
+        explanationCursor = -1;
+        return;
+    }
+
+    const safeIndex = Math.max(0, Math.min(index, items.length - 1));
+    explanationCursor = safeIndex;
+
+    items.forEach((el, i) => {
+        const isCurrent = i === safeIndex;
+        el.classList.toggle('explanation-current', isCurrent);
+        el.hidden = !isCurrent;
+    });
+
+    items[safeIndex].scrollIntoView({ block: 'nearest', behavior: smooth ? 'smooth' : 'auto' });
+}
+
+function syncExplanationMenuButtons() {
+    const prevBtn = document.getElementById('explanationsPrevBtn');
+    const nextBtn = document.getElementById('explanationsNextBtn');
+    const clearBtn = document.getElementById('explanationsClearBtn');
+    const toolbarNextBtn = document.getElementById('nextStepBtn');
+    const items = getExplanationElements();
+    const hasItems = items.length > 0;
+
+    if (!hasItems) {
+        explanationCursor = -1;
+    } else if (explanationCursor < 0 || explanationCursor >= items.length) {
+        explanationCursor = 0;
+    }
+
+    if (prevBtn) prevBtn.disabled = stepHistory.length === 0;
+    if (nextBtn) nextBtn.disabled = !!toolbarNextBtn?.disabled;
+    if (clearBtn) clearBtn.disabled = !hasItems;
+}
+
+function markNewestExplanationAsCurrent() {
+    focusExplanation(0, { smooth: false });
+    syncExplanationMenuButtons();
+}
+
+function initExplanationMenu() {
+    const prevBtn = document.getElementById('explanationsPrevBtn');
+    const nextBtn = document.getElementById('explanationsNextBtn');
+    const clearBtn = document.getElementById('explanationsClearBtn');
+    const explanationsDiv = document.getElementById('explanations');
+
+    if (!explanationsDiv) return;
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            const toolbarPrevBtn = document.getElementById('prevStepBtn');
+            toolbarPrevBtn?.click();
+
+            // Aligner le rendu visuel des explications avec l'action d'undo.
+            const items = getExplanationElements();
+            if (items.length > 0) {
+                focusExplanation(Math.min(items.length - 1, explanationCursor + 1));
+                syncExplanationMenuButtons();
+            }
+        });
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            const toolbarNextBtn = document.getElementById('nextStepBtn');
+            toolbarNextBtn?.click();
+            syncExplanationMenuButtons();
+        });
+    }
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            explanationsDiv.innerHTML = '';
+            explanationCursor = -1;
+            syncExplanationMenuButtons();
+            setStatus('Liste des explications effacée.', 'ok');
+        });
+    }
+
+    syncExplanationMenuButtons();
+}
 
 function buildEmptyCandidates() {
     return Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
@@ -152,6 +244,7 @@ function applyStep(step) {
 
     // Sauvegarde de l'état AVANT application
     stepHistory.push(getDeepState());
+    syncExplanationMenuButtons();
 
     const tech = window.SudokuTechniqueRegistry.find(t => t.key === step.key);
 
@@ -256,6 +349,7 @@ function displayExplanation(step) {
     // Ajouter la nouvelle explication au début
     explanation.style.animation = 'fadeIn 0.3s ease-out';
     explanationsDiv.insertBefore(explanation, explanationsDiv.firstChild);
+    markNewestExplanationAsCurrent();
 }
 
 /*******************************************************
@@ -314,6 +408,7 @@ function displayHint(step) {
 
     hint.style.animation = 'fadeIn 0.3s ease-out';
     explanationsDiv.insertBefore(hint, explanationsDiv.firstChild);
+    markNewestExplanationAsCurrent();
 
     // Raccorder le bouton "Appliquer" pour exécuter l'étape proposée
     const applyBtn = hint.querySelector('.apply-hint-btn');
@@ -360,13 +455,16 @@ document.getElementById('clearHighlightsBtn')?.addEventListener('click', clearHi
 // Appeler le populate après que les fichiers techniques ont été chargés
 window.addEventListener('DOMContentLoaded', () => {
     populateTechniqueSelect();
+    initExplanationMenu();
 });
 
 document.getElementById('prevStepBtn')?.addEventListener('click', () => {
     if (stepHistory.length === 0) {
         setStatus("Aucune étape précédente disponible.", "warn");
+        syncExplanationMenuButtons();
         return;
     }
     const prev = stepHistory.pop();
     restoreDeepState(prev);
+    syncExplanationMenuButtons();
 });

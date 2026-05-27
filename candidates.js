@@ -13,6 +13,7 @@
     const gridEl = document.getElementById('grid');
     const candPopover = document.getElementById('candPopover');
     const toggleCandidatesBtn = document.getElementById('toggleCandidatesBtn');
+    const sanitizeCandidatesBtn = document.getElementById('sanitizeCandidatesBtn');
     const toggleValuesBtn = document.getElementById('toggleValuesBtn');
 
     /*******************************************************
@@ -198,6 +199,18 @@
         });
     }
 
+    if (sanitizeCandidatesBtn) {
+        sanitizeCandidatesBtn.addEventListener('click', function () {
+            window.sanitizeCandidates();
+            if (typeof window.setStatus === 'function') {
+                window.setStatus('Candidats invalides nettoyes (ligne, colonne, bloc).', 'ok');
+            }
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        });
+    }
+
     /*******************************************************
      * POPOVER DE SÉLECTION DES CANDIDATS
      *******************************************************/
@@ -266,11 +279,28 @@
             btn.classList.toggle('active', cands.includes(num));
         });
 
-        // Positionner le popover
-        const rect = td.getBoundingClientRect();
-        candPopover.style.left = rect.left + 'px';
-        candPopover.style.top = (rect.bottom + 5) + 'px';
+        // Afficher d'abord pour mesurer puis positionner sans deborder.
         candPopover.setAttribute('aria-hidden', 'false');
+
+        const rect = td.getBoundingClientRect();
+        const popRect = candPopover.getBoundingClientRect();
+        const isMobile = window.innerWidth <= 768;
+        const viewportPadding = 8;
+
+        let left = rect.left;
+        if (isMobile && rect.left > (window.innerWidth / 2)) {
+            left = rect.right - popRect.width;
+        }
+
+        left = Math.max(viewportPadding, Math.min(left, window.innerWidth - popRect.width - viewportPadding));
+
+        let top = rect.bottom + 5;
+        if (top + popRect.height > window.innerHeight - viewportPadding) {
+            top = Math.max(viewportPadding, rect.top - popRect.height - 5);
+        }
+
+        candPopover.style.left = left + 'px';
+        candPopover.style.top = top + 'px';
     }
 
     function hidePopover() {
