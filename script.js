@@ -38,6 +38,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const clearValuesBtn = document.getElementById('clearValuesBtn');
     const gridPlayMenuEl = document.getElementById('gridPlayMenu');
     const mobileGridDigitsEl = document.getElementById('mobileGridDigits');
+    const gridTimerBtnEl = document.getElementById('gridTimerBtn');
+    const gridTimerEl = document.getElementById('gridTimerValue');
+    const gridTimerToggleIconEl = document.getElementById('gridTimerToggleIcon');
+    const demandCounterEl = document.getElementById('demandCounter');
+    const gridDifficultyEl = document.getElementById('gridDifficulty');
     const gridMenuValuesBtn = document.getElementById('gridMenuValuesBtn');
     const gridMenuCandidatesBtn = document.getElementById('gridMenuCandidatesBtn');
     const gridMenuSanitizeBtn = document.getElementById('gridMenuSanitizeBtn');
@@ -66,6 +71,14 @@ document.addEventListener('DOMContentLoaded', function () {
     let selectedGridCellEl = null;
     let photoImportInProgress = false;
     let statusHideTimer = null;
+    let timerIntervalId = null;
+    let timerStartMs = 0;
+    let timerElapsedMs = 0;
+    let timerPaused = false;
+    let puzzleSolvedCelebrated = false;
+    let demandCount = 0;
+    let difficultyCacheKey = '';
+    let difficultyCacheValue = { label: '-', score: 0 };
 
     const STATUS_AUTO_HIDE_MS = 4000;
     const MOBILE_BREAKPOINT = 768;
@@ -77,6 +90,286 @@ document.addEventListener('DOMContentLoaded', function () {
         blockSize: 15,
         thresholdC: 6,
         denoise: 1
+    };
+
+    function formatElapsed(ms) {
+        const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+    }
+
+    function renderTimer() {
+        if (!gridTimerEl) return;
+        const currentElapsed = timerIntervalId ? (Date.now() - timerStartMs) : timerElapsedMs;
+        gridTimerEl.textContent = formatElapsed(currentElapsed);
+    }
+
+    function renderPauseButton() {
+        if (!gridTimerBtnEl) return;
+        gridTimerBtnEl.setAttribute('aria-pressed', timerPaused ? 'true' : 'false');
+        gridTimerBtnEl.setAttribute('title', timerPaused ? 'Reprendre le timer' : 'Mettre en pause le timer');
+        gridTimerBtnEl.setAttribute('aria-label', timerPaused ? 'Reprendre le timer' : 'Mettre en pause le timer');
+
+        if (gridTimerToggleIconEl) {
+            gridTimerToggleIconEl.innerHTML = '<i data-lucide="' + (timerPaused ? 'play' : 'pause') + '"></i>';
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        }
+    }
+
+    function renderDemandCounter() {
+        if (!demandCounterEl) return;
+        demandCounterEl.textContent = 'Demandes: ' + demandCount;
+    }
+
+    function resetDemandCounter() {
+        demandCount = 0;
+        renderDemandCounter();
+        difficultyCacheKey = '';
+    }
+
+    function buildDifficultyCacheKey(state) {
+        const values = state && Array.isArray(state.values) ? state.values : [];
+        const givens = state && Array.isArray(state.givens) ? state.givens : [];
+
+        if (!values.length || !givens.length) return '';
+
+        const flatValues = [];
+        const flatGivens = [];
+        for (let r = 0; r < SIZE; r++) {
+            for (let c = 0; c < SIZE; c++) {
+                flatValues.push(String(Number((values[r] && values[r][c]) || 0)));
+                flatGivens.push((givens[r] && givens[r][c]) ? '1' : '0');
+            }
+        }
+
+        return flatValues.join('') + '|' + flatGivens.join('');
+    }
+
+    function difficultyLabelFromScore(score) {
+        if (score <= 3) return 'Facile';
+        if (score <= 5) return 'Moyen';
+        if (score <= 8) return 'Difficile';
+        return 'Expert';
+    }
+
+    function estimateDifficulty(state) {
+        const values = state && Array.isArray(state.values) ? state.values : [];
+        const givens = state && Array.isArray(state.givens) ? state.givens : [];
+        const candidates = state && Array.isArray(state.candidates) ? state.candidates : [];
+
+        if (!values.length) return { label: '-', score: 0 };
+
+        const cacheKey = buildDifficultyCacheKey(state);
+        if (cacheKey && cacheKey === difficultyCacheKey) {
+            return difficultyCacheValue;
+        }
+
+        let empties = 0;
+        let givensCount = 0;
+        let candidateCountSum = 0;
+        let candidateCells = 0;
+
+        for (let r = 0; r < SIZE; r++) {
+            for (let c = 0; c < SIZE; c++) {
+                const v = Number((values[r] && values[r][c]) || 0);
+                if (givens[r] && givens[r][c]) givensCount += 1;
+                if (v >= 1 && v <= 9) continue;
+                empties += 1;
+
+                const cands = candidates[r] && Array.isArray(candidates[r][c]) ? candidates[r][c] : [];
+                if (cands.length > 0) {
+                    candidateCountSum += cands.length;
+                    candidateCells += 1;
+                }
+            }
+        }
+
+        if (empties === 0) {
+            const solved = { label: 'Resolue', score: 0 };
+            difficultyCacheKey = cacheKey;
+            difficultyCacheValue = solved;
+            return solved;
+        }
+
+        const avgCandidates = candidateCells > 0 ? (candidateCountSum / candidateCells) : 4.5;
+        const heuristicRaw = (empties * 1.15) + (avgCandidates * 5.2) + ((81 - givensCount) * 0.22);
+        let score10 = Math.round(Math.max(1, Math.min(10, heuristicRaw / 7)));
+
+        if (typeof window.peekTechniqueDifficulty === 'function') {
+            const techDifficulty = window.peekTechniqueDifficulty();
+            if (techDifficulty && techDifficulty.level) {
+                const floorByLevel = {
+                    basic: 3,
+                    intermediate: 5,
+                    advanced: 7,
+                    expert: 9
+                };
+                const floorScore = floorByLevel[techDifficulty.level] || 3;
+                score10 = Math.max(score10, floorScore);
+            }
+        }
+
+        const result = {
+            label: difficultyLabelFromScore(score10),
+            score: score10
+        };
+
+        difficultyCacheKey = cacheKey;
+        difficultyCacheValue = result;
+        return result;
+    }
+
+    function renderDifficulty(state) {
+        if (!gridDifficultyEl) return;
+        const difficulty = estimateDifficulty(state || getState());
+        if (difficulty.score > 0) {
+            gridDifficultyEl.textContent = 'Difficulte: ' + difficulty.label + ' (' + difficulty.score + '/10)';
+            return;
+        }
+        gridDifficultyEl.textContent = 'Difficulte: ' + difficulty.label;
+    }
+
+    function startTimer() {
+        if (timerIntervalId || timerPaused) return;
+        timerStartMs = Date.now() - timerElapsedMs;
+        timerIntervalId = setInterval(renderTimer, 1000);
+        renderTimer();
+    }
+
+    function stopTimer() {
+        if (!timerIntervalId) return;
+        clearInterval(timerIntervalId);
+        timerIntervalId = null;
+        timerElapsedMs = Date.now() - timerStartMs;
+        renderTimer();
+    }
+
+    function resetTimer() {
+        if (timerIntervalId) {
+            clearInterval(timerIntervalId);
+            timerIntervalId = null;
+        }
+        timerElapsedMs = 0;
+        timerStartMs = Date.now();
+        timerPaused = false;
+        renderPauseButton();
+        renderTimer();
+    }
+
+    function toggleTimerPause() {
+        if (timerPaused) {
+            timerPaused = false;
+            renderPauseButton();
+            startTimer();
+            return;
+        }
+
+        if (timerIntervalId) {
+            stopTimer();
+        }
+        timerPaused = true;
+        renderPauseButton();
+    }
+
+    function isSolvedGrid(values) {
+        const hasAllDigits = (arr) => {
+            const seen = new Set(arr);
+            if (seen.size !== 9) return false;
+            for (let n = 1; n <= 9; n++) {
+                if (!seen.has(n)) return false;
+            }
+            return true;
+        };
+
+        for (let r = 0; r < SIZE; r++) {
+            if (!hasAllDigits(values[r])) return false;
+        }
+
+        for (let c = 0; c < SIZE; c++) {
+            const col = [];
+            for (let r = 0; r < SIZE; r++) col.push(values[r][c]);
+            if (!hasAllDigits(col)) return false;
+        }
+
+        for (let br = 0; br < 3; br++) {
+            for (let bc = 0; bc < 3; bc++) {
+                const block = [];
+                for (let r = br * 3; r < br * 3 + 3; r++) {
+                    for (let c = bc * 3; c < bc * 3 + 3; c++) {
+                        block.push(values[r][c]);
+                    }
+                }
+                if (!hasAllDigits(block)) return false;
+            }
+        }
+
+        return true;
+    }
+
+    function launchConfetti() {
+        const layer = document.createElement('div');
+        layer.className = 'confetti-layer';
+        const colors = ['#22c55e', '#60a5fa', '#f59e0b', '#ef4444', '#a78bfa', '#14b8a6'];
+
+        for (let i = 0; i < 120; i++) {
+            const fromLeft = Math.random() > 0.5;
+            const piece = document.createElement('span');
+            piece.className = 'confetti-piece ' + (fromLeft ? 'from-left' : 'from-right');
+            piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+            piece.style.setProperty('--tx', (Math.random() * 220 - 110).toFixed(0) + 'px');
+            piece.style.setProperty('--ty', '-' + (45 + Math.random() * 55).toFixed(0) + 'vh');
+            piece.style.setProperty('--fallx', (Math.random() * 120 - 60).toFixed(0) + 'px');
+            piece.style.setProperty('--rot', (Math.random() * 1260 - 630).toFixed(0) + 'deg');
+            piece.style.setProperty('--dur', (2200 + Math.random() * 1400).toFixed(0) + 'ms');
+            piece.style.animationDelay = (Math.random() * 220).toFixed(0) + 'ms';
+            layer.appendChild(piece);
+        }
+
+        document.body.appendChild(layer);
+        setTimeout(() => {
+            layer.remove();
+        }, 4700);
+    }
+
+    function syncTimerAndCompletion(values) {
+        let hasAnyValue = false;
+        for (let r = 0; r < SIZE && !hasAnyValue; r++) {
+            for (let c = 0; c < SIZE; c++) {
+                if (Number(values[r][c] || 0) >= 1) {
+                    hasAnyValue = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasAnyValue) {
+            resetTimer();
+            resetDemandCounter();
+            puzzleSolvedCelebrated = false;
+            return;
+        }
+
+        const solved = isSolvedGrid(values);
+        if (solved) {
+            stopTimer();
+            if (!puzzleSolvedCelebrated) {
+                puzzleSolvedCelebrated = true;
+                launchConfetti();
+                setStatus('Bravo ! Grille resolue.', 'ok');
+            }
+            return;
+        }
+
+        puzzleSolvedCelebrated = false;
+        startTimer();
+    }
+
+    window.incrementDemandCounter = function () {
+        demandCount += 1;
+        renderDemandCounter();
     };
 
     function setStatus(msg, type = '') {
@@ -153,11 +446,43 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function resetImportedGridView() {
+        hideOverlayNumpad();
+        setSelectedGridCell(null);
+        if (typeof window.clearHighlights === 'function') {
+            window.clearHighlights();
+        }
+        if (typeof window.resetCandidatesView === 'function') {
+            window.resetCandidatesView();
+        }
+        if (typeof window.resetExplanationPanel === 'function') {
+            window.resetExplanationPanel();
+        }
+
+        // Repartir a zero apres un import, puis relancer si la grille importee contient des valeurs.
+        resetTimer();
+        resetDemandCounter();
+        const state = getState();
+        const hasAnyValue = Array.isArray(state.values)
+            && state.values.some((row) => Array.isArray(row) && row.some((v) => Number(v || 0) >= 1));
+        if (hasAnyValue) {
+            startTimer();
+        }
+    }
+
     function applyMobileDigitToSelection(digit) {
         if (!selectedGridCellEl || !gridEl || !isMobileViewport()) return;
         if (selectedGridCellEl.classList.contains('given')) return;
         const input = selectedGridCellEl.querySelector('.cell-input');
         if (!input) return;
+
+        if (digit === 'clear') {
+            input.value = '';
+            updateConflicts();
+            callCandidatesRender();
+            refreshGridPlayMenuVisibility();
+            return;
+        }
 
         const safeDigit = Number(digit);
         if (!(safeDigit >= 1 && safeDigit <= 9)) return;
@@ -363,6 +688,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updateConflicts();
         callCandidatesRender();
         setGridPlayMenuVisible(computeGridHasValues(values));
+        renderDifficulty(getState());
     }
 
     function updateConflicts() {
@@ -417,6 +743,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 markDuplicates(block);
             }
         }
+
+        syncTimerAndCompletion(values);
+        renderDifficulty({ values, givens: state.givens, candidates: state.candidates });
     }
 
     function renderAllCells() {
@@ -1091,6 +1420,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     const obj = JSON.parse(reader.result);
                     validateState(obj);
                     setState(obj);
+                    resetImportedGridView();
                     setStatus('Import depuis fichier reussi.', 'ok');
                 } catch (err) {
                     setStatus('Erreur de parsing : ' + err.message, 'err');
@@ -1223,6 +1553,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const givens = values.map((row) => row.map((v) => v > 0));
                 const candidates = Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => []));
                 setState({ values, givens, candidates });
+                resetImportedGridView();
                 resetPhotoPreview();
                 setStatus('Grille importee depuis la grille superposee corrigee.', 'ok');
                 return;
@@ -1258,6 +1589,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             try {
                 await importFromPhoto(pendingPhotoFile, pendingPhotoCornerRatios);
+                resetImportedGridView();
                 resetPhotoPreview();
             } catch (err) {
                 setStatus('Echec import photo : ' + err.message, 'err');
@@ -1507,9 +1839,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (mobileGridDigitsEl) {
         mobileGridDigitsEl.addEventListener('click', (evt) => {
+            const clearBtn = evt.target.closest('button[data-action="clear"]');
+            if (clearBtn) {
+                applyMobileDigitToSelection('clear');
+                return;
+            }
             const btn = evt.target.closest('button[data-digit]');
             if (!btn) return;
             applyMobileDigitToSelection(btn.getAttribute('data-digit'));
+        });
+    }
+
+    if (gridTimerBtnEl) {
+        gridTimerBtnEl.addEventListener('click', () => {
+            toggleTimerPause();
         });
     }
 
@@ -1526,11 +1869,18 @@ document.addEventListener('DOMContentLoaded', function () {
     window.updateConflicts = updateConflicts;
     window.setStatus = setStatus;
     window.renderAllCells = renderAllCells;
+    window.invalidateDifficultyEstimate = function () {
+        difficultyCacheKey = '';
+        renderDifficulty(getState());
+    };
 
     applyThemeByWidth();
     syncMobileToolsState();
 
     buildGrid();
+    resetTimer();
+    resetDemandCounter();
+    renderDifficulty(getState());
     setGridPlayMenuVisible(false);
     setStatus('Pret.');
 

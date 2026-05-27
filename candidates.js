@@ -335,6 +335,8 @@
 
         const hasValue = input.value !== '';
         const cands = JSON.parse(td.dataset.candidates || '[]');
+        const keepDigits = JSON.parse(td.dataset.highlightKeepDigits || '[]');
+        const killDigits = JSON.parse(td.dataset.highlightKillDigits || '[]');
 
         // Retirer l'ancien affichage des candidats
         const oldCandDiv = td.querySelector('.cell-candidates');
@@ -354,7 +356,11 @@
                 const span = document.createElement('span');
                 span.textContent = cands.includes(i) ? i : '';
                 span.className = 'cand-digit';
-                if (cands.includes(i)) span.classList.add('active');
+                if (cands.includes(i)) {
+                    span.classList.add('active');
+                    if (keepDigits.includes(i)) span.classList.add('cand-keep');
+                    if (killDigits.includes(i)) span.classList.add('cand-kill');
+                }
                 candDiv.appendChild(span);
             }
 
@@ -371,6 +377,24 @@
             }
         }
     }
+
+    window.resetCandidatesView = function () {
+        candidatesVisible = false;
+        valuesVisible = true;
+        hidePopover();
+
+        if (toggleCandidatesBtn) {
+            toggleCandidatesBtn.innerHTML = '<i data-lucide="grid-3x3"></i>Afficher candidats';
+        }
+        if (toggleValuesBtn) {
+            toggleValuesBtn.innerHTML = '<i data-lucide="eye-off"></i>Masquer valeurs';
+        }
+
+        renderAllCells();
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    };
 
     // Ajouter le gestionnaire de clic droit sur les cellules
     if (gridEl) {
@@ -407,9 +431,13 @@
         for (let r = 0; r < SIZE; r++) {
             for (let c = 0; c < SIZE; c++) {
                 const td = gridEl.rows[r].cells[c];
-                td.classList.remove('highlight', 'highlight-eliminate', 'highlight-place');
+                td.classList.remove('highlight', 'highlight-eliminate', 'highlight-place', 'cell-highlight', 'col-highlight');
+                delete td.dataset.highlightKeepDigits;
+                delete td.dataset.highlightKillDigits;
             }
         }
+
+        renderAllCells();
     };
 
     window.highlightCell = function (r, c, type = 'highlight') {
@@ -424,11 +452,27 @@
     };
 
     window.highlightCandidate = function (r, c, _digit, mode = 'keep') {
+        if (!gridEl || !gridEl.rows) return;
+        const td = gridEl.rows[r]?.cells[c];
+        if (!td) return;
+
+        const digit = Number(_digit);
+        if (digit >= 1 && digit <= 9) {
+            const key = mode === 'kill' ? 'highlightKillDigits' : 'highlightKeepDigits';
+            const list = JSON.parse(td.dataset[key] || '[]');
+            if (!list.includes(digit)) {
+                list.push(digit);
+                td.dataset[key] = JSON.stringify(list);
+            }
+        }
+
         if (mode === 'kill') {
             window.highlightCell(r, c, 'highlight-eliminate');
+            renderCell(td);
             return;
         }
         window.highlightCell(r, c, 'highlight');
+        renderCell(td);
     };
 
 })();

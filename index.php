@@ -52,7 +52,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
           
           <div>
             <button class="btn" id="toggleCandidatesBtn" title="Afficher/Masquer/Régénérer les candidats"><i data-lucide="grid-3x3"></i>Afficher candidats</button>
-            <button class="btn" id="sanitizeCandidatesBtn" title="Nettoyer les candidats invalides (ligne, colonne, bloc)"><i data-lucide="filter"></i>Nettoyer candidats</button>
+            <button class="btn" id="sanitizeCandidatesBtn" title="Nettoyer les candidats invalides (ligne, colonne, bloc)"><i data-lucide="eraser"></i>Nettoyer candidats</button>
           </div>
 
           <div>
@@ -78,6 +78,14 @@ define('MODE', 'debug'); // 'debug' or 'production'
 
 
       <div class="grid-wrapper">
+        <div class="grid-topbar" aria-label="Informations de partie">
+          <button class="grid-timer" id="gridTimerBtn" type="button" aria-pressed="false" title="Mettre en pause le timer" aria-label="Mettre en pause le timer">
+            <span id="gridTimerToggleIcon"><i data-lucide="pause"></i></span>
+            <span id="gridTimerValue" aria-live="polite">00:00</span>
+          </button>
+          <div class="grid-demand-counter" id="demandCounter" aria-live="polite">Aides: 0</div>
+          <div class="grid-difficulty" id="gridDifficulty" aria-live="polite">Difficulte: -</div>
+        </div>
         <table class="sudoku-grid" aria-label="Grille Sudoku 9×9" id="grid"></table>
         <div class="mobile-grid-digits" id="mobileGridDigits" aria-label="Saisie rapide mobile">
           <button class="btn mobile-digit-btn" type="button" data-digit="1">1</button>
@@ -89,11 +97,12 @@ define('MODE', 'debug'); // 'debug' or 'production'
           <button class="btn mobile-digit-btn" type="button" data-digit="7">7</button>
           <button class="btn mobile-digit-btn" type="button" data-digit="8">8</button>
           <button class="btn mobile-digit-btn" type="button" data-digit="9">9</button>
+          <button class="btn mobile-digit-btn" type="button" data-action="clear" title="Effacer la valeur" aria-label="Effacer la valeur">⌫</button>
         </div>
         <div class="grid-play-menu" id="gridPlayMenu" hidden>
           <button class="btn grid-play-btn" id="gridMenuValuesBtn" type="button" title="Afficher/masquer les valeurs" aria-label="Afficher ou masquer les valeurs"><i data-lucide="eye-off"></i></button>
           <button class="btn grid-play-btn" id="gridMenuCandidatesBtn" type="button" title="Afficher/masquer les candidats" aria-label="Afficher ou masquer les candidats"><i data-lucide="grid-3x3"></i></button>
-          <button class="btn grid-play-btn" id="gridMenuSanitizeBtn" type="button" title="Nettoyer les candidats invalides" aria-label="Nettoyer les candidats"><i data-lucide="filter"></i></button>
+          <button class="btn grid-play-btn" id="gridMenuSanitizeBtn" type="button" title="Nettoyer les candidats invalides" aria-label="Nettoyer les candidats"><i data-lucide="eraser"></i></button>
           <button class="btn grid-play-btn" id="gridMenuHintBtn" type="button" title="Proposer un indice" aria-label="Indice"><i data-lucide="lightbulb"></i></button>
           <button class="btn grid-play-btn" id="gridMenuSolveBtn" type="button" title="Appliquer un pas de resolution" aria-label="Resolution"><i data-lucide="play"></i></button>
         </div>

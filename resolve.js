@@ -116,6 +116,19 @@ function initExplanationMenu() {
     syncExplanationMenuButtons();
 }
 
+function resetExplanationPanel() {
+    const explanationsDiv = document.getElementById('explanations');
+    if (explanationsDiv) {
+        explanationsDiv.innerHTML = '';
+    }
+    explanationCursor = -1;
+    stepHistory = [];
+    clearHighlights();
+    syncExplanationMenuButtons();
+}
+
+window.resetExplanationPanel = resetExplanationPanel;
+
 function buildEmptyCandidates() {
     return Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
 }
@@ -284,6 +297,47 @@ const TECHNIQUE_DIFFICULTY = {
     xywing: 'expert'
 };
 
+const TECHNIQUE_DIFFICULTY_RANK = {
+    basic: 1,
+    intermediate: 2,
+    advanced: 3,
+    expert: 4
+};
+
+// Retourne une indication de difficulte basee sur la technique la plus avancee
+// detectee a l'etat courant, sans appliquer d'etape.
+function peekTechniqueDifficulty() {
+    const order = TECH_ORDER();
+    const ranked = order.slice().sort((a, b) => {
+        const da = TECHNIQUE_DIFFICULTY_RANK[TECHNIQUE_DIFFICULTY[a] || 'basic'] || 1;
+        const db = TECHNIQUE_DIFFICULTY_RANK[TECHNIQUE_DIFFICULTY[b] || 'basic'] || 1;
+        if (db !== da) return db - da;
+        return order.indexOf(a) - order.indexOf(b);
+    });
+
+    syncLegacyTechniqueGlobals();
+
+    for (const key of ranked) {
+        const tech = window.SudokuTechniqueRegistry.find(t => t.key === key);
+        if (!tech || typeof tech.finder !== 'function') continue;
+
+        try {
+            const step = tech.finder();
+            if (!step) continue;
+            return {
+                key,
+                level: TECHNIQUE_DIFFICULTY[key] || 'basic'
+            };
+        } catch (_) {
+            // Ignore une technique qui echoue ponctuellement.
+        }
+    }
+
+    return null;
+}
+
+window.peekTechniqueDifficulty = peekTechniqueDifficulty;
+
 // Transforme une URL YouTube (watch/shorts/youtu.be) en URL d'embed. Retourne '' si non supporté.
 function toEmbedUrl(url) {
     try {
@@ -410,6 +464,41 @@ function displayHint(step) {
     explanationsDiv.insertBefore(hint, explanationsDiv.firstChild);
     markNewestExplanationAsCurrent();
 
+    const detailsEl = hint.querySelector('details');
+    const techForPreview = window.SudokuTechniqueRegistry.find(t => t.key === step.key);
+
+    // Affiche le meme surlignage que la resolution, sans modifier l'etat de la grille.
+    const previewHintHighlights = () => {
+        if (!detailsEl || !detailsEl.open || !techForPreview || typeof techForPreview.applier !== 'function') return;
+        const snapshot = getDeepState();
+        const prevStatus = document.getElementById('status')?.textContent || '';
+        clearHighlights();
+        try {
+            techForPreview.applier(step);
+        } catch (_) {
+            clearHighlights();
+        }
+        setState(snapshot);
+        updateConflicts();
+        renderAllCells();
+        if (Array.isArray(snapshot.candidates)) {
+            window.candidates = structuredClone(snapshot.candidates);
+        }
+        if (typeof setStatus === 'function' && prevStatus) {
+            setStatus(prevStatus);
+        }
+    };
+
+    if (detailsEl) {
+        detailsEl.addEventListener('toggle', () => {
+            if (detailsEl.open) {
+                previewHintHighlights();
+                return;
+            }
+            clearHighlights();
+        });
+    }
+
     // Raccorder le bouton "Appliquer" pour exécuter l'étape proposée
     const applyBtn = hint.querySelector('.apply-hint-btn');
     if (applyBtn) {
@@ -434,6 +523,9 @@ function displayHint(step) {
 }
 
 document.getElementById('nextStepBtn')?.addEventListener('click', () => {
+    if (typeof window.incrementDemandCounter === 'function') {
+        window.incrementDemandCounter();
+    }
     cleanCandidates();
     clearHighlights();
     const step = findNextStep();
@@ -444,6 +536,9 @@ document.getElementById('nextStepBtn')?.addEventListener('click', () => {
 
 // Bouton Indice: suggère la technique sans appliquer l'étape
 document.getElementById('hintBtn')?.addEventListener('click', () => {
+    if (typeof window.incrementDemandCounter === 'function') {
+        window.incrementDemandCounter();
+    }
     // On ne touche pas aux surlignages pour garder le contexte courant
     const step = findNextStep();
     displayHint(step);
@@ -456,6 +551,9 @@ document.getElementById('clearHighlightsBtn')?.addEventListener('click', clearHi
 window.addEventListener('DOMContentLoaded', () => {
     populateTechniqueSelect();
     initExplanationMenu();
+    if (typeof window.invalidateDifficultyEstimate === 'function') {
+        window.invalidateDifficultyEstimate();
+    }
 });
 
 document.getElementById('prevStepBtn')?.addEventListener('click', () => {

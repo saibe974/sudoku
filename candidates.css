@@ -42,6 +42,18 @@ body.theme-light .cand-digit {
     opacity: 1;
 }
 
+.cand-digit.cand-keep {
+    color: var(--ok);
+    opacity: 1;
+}
+
+body.theme-light .cand-digit.cand-kill {
+    color: var(--err);
+    opacity: 1;
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+}
+
 /* Highlights pour les techniques */
 .highlight {
     background: rgba(96, 165, 250, 0.2) !important;
@@ -53,6 +65,14 @@ body.theme-light .cand-digit {
 
 .highlight-place {
     background: rgba(34, 197, 94, 0.2) !important;
+}
+
+.cell-highlight {
+    background: rgba(96, 165, 250, 0.14) !important;
+}
+
+.col-highlight {
+    background: rgba(56, 189, 248, 0.12) !important;
 }
 
 /* Popover candidats */
