@@ -240,6 +240,9 @@ function findNextStep() {
  * Nettoyage des candidats
  ******************************************************/
 function cleanCandidates() {
+    if (typeof window.ensureCandidates === 'function') {
+        window.ensureCandidates();
+    }
     // Utilise la fonction sanitizeCandidates() définie dans script.js
     window.sanitizeCandidates();
     SudokuUI.reRender(); // Mise à jour de l'affichage
@@ -304,9 +307,94 @@ const TECHNIQUE_DIFFICULTY_RANK = {
     expert: 4
 };
 
-// Retourne une indication de difficulte basee sur la technique la plus avancee
-// detectee a l'etat courant, sans appliquer d'etape.
-function peekTechniqueDifficulty() {
+const EXPERT_TECHNIQUES = new Set(['boxline', 'uniqueRectangle', 'xwing', 'ywing', 'swordfish', 'xywing']);
+let techniqueDifficultyPreviewCacheKey = '';
+let techniqueDifficultyPreviewCacheValue = null;
+
+function buildTechniqueDifficultyCacheKey(state) {
+    const values = state && Array.isArray(state.values) ? state.values : [];
+    const givens = state && Array.isArray(state.givens) ? state.givens : [];
+    if (!values.length || !givens.length) return '';
+
+    const flatValues = [];
+    const flatGivens = [];
+    for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+            flatValues.push(String(Number((values[r] && values[r][c]) || 0)));
+            flatGivens.push((givens[r] && givens[r][c]) ? '1' : '0');
+        }
+    }
+    return flatValues.join('') + '|' + flatGivens.join('');
+}
+
+function sanitizeForSimulation() {
+    if (typeof window.ensureCandidates === 'function') {
+        window.ensureCandidates();
+    }
+    if (typeof window.sanitizeCandidates === 'function') {
+        window.sanitizeCandidates();
+    }
+    syncLegacyTechniqueGlobals();
+}
+
+function findNextStepForSimulation(order) {
+    sanitizeForSimulation();
+
+    for (const key of order) {
+        const tech = window.SudokuTechniqueRegistry.find(t => t.key === key);
+        if (!tech || typeof tech.finder !== 'function') continue;
+
+        try {
+            const step = tech.finder();
+            if (step) return { ...step, key };
+        } catch (_) {
+            // Ignore les erreurs ponctuelles d'une technique pendant la simulation.
+        }
+    }
+
+    return null;
+}
+
+function applyStepForSimulation(step) {
+    const tech = window.SudokuTechniqueRegistry.find(t => t.key === step.key);
+    if (!tech || typeof tech.applier !== 'function') return false;
+
+    try {
+        tech.applier(step);
+        persistLegacyTechniqueCandidates();
+        sanitizeForSimulation();
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+function computeDifficultyScoreFromTechniqueStats(stats) {
+    const count = (key) => Number(stats[key] || 0);
+    const used = (key) => count(key) > 0;
+    const usedExpertTechniques = Array.from(EXPERT_TECHNIQUES).filter(key => used(key)).length;
+
+    if (usedExpertTechniques >= 3) return 10;
+    if (used('coloring') || used('xwing')) return 9;
+    if (used('pointing') && (used('boxline') || used('uniqueRectangle'))) return 8;
+    if (used('hiddenTriple')) return 7;
+    if (used('nakedTriple')) return 6;
+    if (used('hiddenPair')) return 5;
+    if (used('nakedPair') && !used('nakedSingle')) return 4;
+    if (used('nakedPair')) return 3;
+    if (used('hiddenSingle')) return 2;
+    if (used('nakedSingle')) return 1;
+    return 0;
+}
+
+function levelFromScore(score) {
+    if (score <= 0) return 'basic';
+    if (score <= 5) return 'basic';
+    if (score <= 8) return 'advanced';
+    return 'expert';
+}
+
+function findHardestUsedTechnique(stats) {
     const order = TECH_ORDER();
     const ranked = order.slice().sort((a, b) => {
         const da = TECHNIQUE_DIFFICULTY_RANK[TECHNIQUE_DIFFICULTY[a] || 'basic'] || 1;
@@ -315,28 +403,115 @@ function peekTechniqueDifficulty() {
         return order.indexOf(a) - order.indexOf(b);
     });
 
-    syncLegacyTechniqueGlobals();
+    return ranked.find(key => Number(stats[key] || 0) > 0) || null;
+}
 
-    for (const key of ranked) {
-        const tech = window.SudokuTechniqueRegistry.find(t => t.key === key);
-        if (!tech || typeof tech.finder !== 'function') continue;
-
-        try {
-            const step = tech.finder();
-            if (!step) continue;
-            return {
-                key,
-                level: TECHNIQUE_DIFFICULTY[key] || 'basic'
-            };
-        } catch (_) {
-            // Ignore une technique qui echoue ponctuellement.
-        }
+// Retourne une estimation basee sur une simulation complete de resolution.
+// La grille visible est restauree a l'identique apres calcul.
+function peekTechniqueDifficulty() {
+    const stateSnapshot = getDeepState();
+    const cacheKey = buildTechniqueDifficultyCacheKey(stateSnapshot);
+    if (cacheKey && cacheKey === techniqueDifficultyPreviewCacheKey && techniqueDifficultyPreviewCacheValue) {
+        return techniqueDifficultyPreviewCacheValue;
     }
 
-    return null;
+    const order = TECH_ORDER();
+    const stats = {};
+    const maxSteps = 300;
+    const prevCandidates = Array.isArray(window.candidates) ? structuredClone(window.candidates) : null;
+    const prevStepHistory = stepHistory;
+    const prevStatusText = document.getElementById('status')?.textContent || '';
+
+    let score = 0;
+    let solved = false;
+
+    try {
+        window.__sudokuDifficultySimulationInProgress = true;
+        setState(structuredClone(stateSnapshot));
+        stepHistory = [];
+        clearHighlights();
+
+        for (let i = 0; i < maxSteps; i++) {
+            const step = findNextStepForSimulation(order);
+            if (!step) break;
+
+            stats[step.key] = (stats[step.key] || 0) + 1;
+
+            const applied = applyStepForSimulation(step);
+            if (!applied) break;
+        }
+
+        const endState = getState();
+        const values = endState && Array.isArray(endState.values) ? endState.values : [];
+        solved = values.length > 0 && values.every(row => Array.isArray(row) && row.every(v => Number(v) >= 1 && Number(v) <= 9));
+        score = computeDifficultyScoreFromTechniqueStats(stats);
+    } finally {
+        setState(stateSnapshot);
+        updateConflicts();
+        renderAllCells();
+        clearHighlights();
+        stepHistory = prevStepHistory;
+        if (prevCandidates) {
+            window.candidates = prevCandidates;
+        }
+        if (typeof setStatus === 'function' && prevStatusText) {
+            setStatus(prevStatusText);
+        }
+        window.__sudokuDifficultySimulationInProgress = false;
+        syncExplanationMenuButtons();
+    }
+
+    const hardestKey = findHardestUsedTechnique(stats);
+    const result = {
+        key: hardestKey,
+        level: levelFromScore(score),
+        score,
+        solved,
+        stats
+    };
+
+    techniqueDifficultyPreviewCacheKey = cacheKey;
+    techniqueDifficultyPreviewCacheValue = result;
+    return result;
 }
 
 window.peekTechniqueDifficulty = peekTechniqueDifficulty;
+
+function getTechniqueUsageReport() {
+    const preview = peekTechniqueDifficulty();
+    if (!preview) return null;
+
+    const stats = preview.stats || {};
+    const order = TECH_ORDER();
+    const registry = window.SudokuTechniqueRegistry || [];
+
+    const items = order
+        .map((key) => {
+            const count = Number(stats[key] || 0);
+            if (count <= 0) return null;
+            const tech = registry.find((t) => t.key === key);
+            return {
+                key,
+                label: tech && tech.label ? tech.label : key,
+                difficulty: TECHNIQUE_DIFFICULTY[key] || 'basic',
+                count
+            };
+        })
+        .filter(Boolean);
+
+    const totalSteps = items.reduce((sum, item) => sum + Number(item.count || 0), 0);
+
+    return {
+        score: Number(preview.score || 0),
+        level: preview.level || 'basic',
+        solved: !!preview.solved,
+        hardestKey: preview.key || null,
+        totalSteps,
+        items
+    };
+}
+
+window.getTechniqueUsageReport = getTechniqueUsageReport;
 
 // Transforme une URL YouTube (watch/shorts/youtu.be) en URL d'embed. Retourne '' si non supporté.
 function toEmbedUrl(url) {

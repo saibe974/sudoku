@@ -108,6 +108,21 @@
         renderAllCells();
     }
 
+    function hasAnyCandidates(state) {
+        return !!(state && state.candidates
+            && state.candidates.some(row => Array.isArray(row) && row.some(cell => Array.isArray(cell) && cell.length > 0)));
+    }
+
+    window.ensureCandidates = function () {
+        if (!gridEl || !gridEl.rows) return false;
+
+        const state = window.getState();
+        if (hasAnyCandidates(state)) return false;
+
+        generateCandidates();
+        return true;
+    };
+
     // Nettoyer les candidats invalides
     window.sanitizeCandidates = function () {
         if (!gridEl || !gridEl.rows) return;
@@ -150,6 +165,9 @@
         }
 
         renderAllCells();
+        if (typeof window.notifyGridActionForTimer === 'function') {
+            window.notifyGridActionForTimer();
+        }
     };
 
     /*******************************************************
@@ -163,8 +181,7 @@
             if (candidatesVisible) {
                 // Générer les candidats s'ils n'existent pas
                 const state = window.getState();
-                const hasCandidates = state.candidates &&
-                    state.candidates.some(row => row.some(cell => cell.length > 0));
+                const hasCandidates = hasAnyCandidates(state);
 
                 if (!hasCandidates) {
                     generateCandidates();
@@ -321,6 +338,9 @@
 
         td.dataset.candidates = JSON.stringify(selected.sort());
         renderCell(td);
+        if (typeof window.notifyGridActionForTimer === 'function') {
+            window.notifyGridActionForTimer();
+        }
     }
 
     /*******************************************************
