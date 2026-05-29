@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const gridEl = document.getElementById('grid');
     const gridWrapperEl = document.querySelector('.grid-wrapper');
     const givenModeEl = document.getElementById('givenMode');
+    const givenColorPickerEl = document.getElementById('givenColorPicker');
     const statusEl = document.getElementById('status');
 
     const downloadBtn = document.getElementById('downloadBtn');
@@ -83,6 +84,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let difficultyModalEl = null;
     let difficultyAnalysisState = 'idle';
     let difficultyPendingModalOpen = false;
+    let difficultyPrereqActionDone = false;
 
     const STATUS_AUTO_HIDE_MS = 4000;
     const MOBILE_BREAKPOINT = 768;
@@ -137,8 +139,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function buildDifficultyCacheKey(state) {
-        const values = state && Array.isArray(state.values) ? state.values : [];
-        const givens = state && Array.isArray(state.givens) ? state.givens : [];
+        const sourceState = buildDifficultySourceState(state);
+        const values = sourceState.values;
+        const givens = sourceState.givens;
 
         if (!values.length || !givens.length) return '';
 
@@ -161,8 +164,96 @@ document.addEventListener('DOMContentLoaded', function () {
         return 'Expert';
     }
 
-    function estimateDifficulty(state) {
+    function difficultyBadgeCode(label) {
+        const normalized = String(label || '').toLowerCase();
+        if (normalized === 'facile' || normalized === 'basic') return 'B';
+        if (normalized === 'moyen' || normalized === 'intermediate') return 'M';
+        if (normalized === 'difficile' || normalized === 'advanced') return 'D';
+        if (normalized === 'expert') return 'E';
+        return '?';
+    }
+
+    function buildDifficultySourceState(state) {
         const values = state && Array.isArray(state.values) ? state.values : [];
+        const givens = state && Array.isArray(state.givens) ? state.givens : [];
+
+        if (!values.length || !givens.length) {
+            return {
+                values: Array.from({ length: SIZE }, () => Array(SIZE).fill(0)),
+                givens: Array.from({ length: SIZE }, () => Array(SIZE).fill(false)),
+                candidates: Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => []))
+            };
+        }
+
+        const sourceValues = Array.from({ length: SIZE }, (_, r) =>
+            Array.from({ length: SIZE }, (_, c) => {
+                const isGiven = !!(givens[r] && givens[r][c]);
+                const value = Number(values[r] && values[r][c] || 0);
+                return isGiven && value >= 1 && value <= 9 ? value : 0;
+            })
+        );
+
+        const sourceGivens = Array.from({ length: SIZE }, (_, r) =>
+            Array.from({ length: SIZE }, (_, c) => !!(givens[r] && givens[r][c] && sourceValues[r][c] >= 1 && sourceValues[r][c] <= 9))
+        );
+
+        return {
+            values: sourceValues,
+            givens: sourceGivens,
+            candidates: Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => []))
+        };
+    }
+
+    function computeHasGridValues(state) {
+        return computeGridHasValues(buildDifficultySourceState(state).values);
+    }
+
+    function applyGivenColor() {
+        if (!givenColorPickerEl) return;
+        const color = String(givenColorPickerEl.value || '#b7ffcf');
+        document.documentElement.style.setProperty('--given-input-color', color);
+    }
+
+    function syncGivenModeUi(announce = false) {
+        const active = !!(givenModeEl && givenModeEl.checked);
+        document.body.classList.toggle('given-mode-active', active);
+
+        const label = givenModeEl ? givenModeEl.closest('label') : null;
+        if (label) {
+            label.classList.add('given-mode-toggle');
+            label.classList.toggle('is-active', active);
+        }
+
+        if (announce) {
+            if (active) {
+                setStatus('Mode Donnees actif: clique une case pour ajouter/retirer un indice de depart.', 'ok');
+            } else {
+                setStatus('Mode Donnees desactive.', 'ok');
+            }
+        }
+    }
+
+    function invalidateDifficultyState(options = {}) {
+        const { allowDisplayAfterAction = false } = options;
+        const state = getState();
+        const hasGrid = computeHasGridValues(state);
+
+        difficultyCacheKey = '';
+        difficultyCacheValue = { label: '-', score: 0 };
+        difficultyAnalysisState = 'idle';
+        difficultyPendingModalOpen = false;
+
+        if (!hasGrid) {
+            difficultyPrereqActionDone = false;
+        } else if (allowDisplayAfterAction) {
+            difficultyPrereqActionDone = true;
+        }
+
+        renderDifficulty(state);
+    }
+
+    function estimateDifficulty(state) {
+        const values = buildDifficultySourceState(state).values;
 
         if (window.__sudokuDifficultySimulationInProgress) {
             return difficultyCacheValue || { label: '-', score: 0 };
@@ -180,10 +271,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function updateDifficultyTitle(state) {
         if (!gridDifficultyEl) return;
-        const hasGrid = computeGridHasValues(state && state.values);
+        const hasGrid = computeHasGridValues(state);
 
         if (!hasGrid) {
             gridDifficultyEl.title = 'Charge une grille pour analyser sa difficulte';
+            return;
+        }
+
+        if (!difficultyPrereqActionDone) {
+            gridDifficultyEl.title = 'Importe ou modifie la grille pour activer l\'analyse de difficulte';
             return;
         }
 
@@ -204,40 +300,60 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!gridDifficultyEl) return;
 
         const safeState = state || getState();
-        const hasGrid = computeGridHasValues(safeState.values);
+        const hasGrid = computeHasGridValues(safeState);
         const difficulty = estimateDifficulty(safeState);
+        gridDifficultyEl.className = 'grid-difficulty';
 
         if (!hasGrid) {
-            gridDifficultyEl.textContent = 'Difficulte: -';
+            gridDifficultyEl.textContent = '-';
+            gridDifficultyEl.classList.add('is-empty');
+            updateDifficultyTitle(safeState);
+            return;
+        }
+
+        if (!difficultyPrereqActionDone) {
+            gridDifficultyEl.textContent = '-';
+            gridDifficultyEl.classList.add('is-empty');
             updateDifficultyTitle(safeState);
             return;
         }
 
         if (difficultyAnalysisState === 'loading') {
-            gridDifficultyEl.textContent = 'Difficulte: Analyse...';
+            gridDifficultyEl.textContent = '...';
+            gridDifficultyEl.classList.add('is-loading');
             updateDifficultyTitle(safeState);
             return;
         }
 
         if (difficulty && difficulty.score > 0) {
-            gridDifficultyEl.textContent = 'Difficulte: ' + difficulty.label + ' (' + difficulty.score + '/10)';
+            const badgeCode = difficultyBadgeCode(difficulty.label);
+            gridDifficultyEl.textContent = badgeCode + ' ' + String(difficulty.score);
+            gridDifficultyEl.classList.add('is-ready', 'level-' + badgeCode.toLowerCase());
             updateDifficultyTitle(safeState);
             return;
         }
 
-        gridDifficultyEl.textContent = 'Difficulte: ?';
+        gridDifficultyEl.textContent = '?';
+        gridDifficultyEl.classList.add('is-idle');
         updateDifficultyTitle(safeState);
     }
 
     function runDifficultySimulation(options = {}) {
         const { openModalWhenDone = false } = options;
         const state = getState();
-        const hasGrid = computeGridHasValues(state.values);
+        const hasGrid = computeHasGridValues(state);
 
         if (!hasGrid) {
             difficultyPendingModalOpen = false;
             difficultyAnalysisState = 'idle';
+            difficultyPrereqActionDone = false;
             renderDifficulty(state);
+            return;
+        }
+
+        if (!difficultyPrereqActionDone) {
+            renderDifficulty(state);
+            setStatus('Analyse indisponible: importe une grille ou modifie des donnees de depart.', 'warn');
             return;
         }
 
@@ -264,7 +380,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const requestState = getState();
             const requestKey = buildDifficultyCacheKey(requestState);
 
-            if (!computeGridHasValues(requestState.values)) {
+            if (!computeHasGridValues(requestState)) {
                 difficultyAnalysisState = 'idle';
                 difficultyPendingModalOpen = false;
                 renderDifficulty(requestState);
@@ -288,7 +404,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (finalKey !== requestKey) {
                 difficultyCacheKey = '';
                 difficultyCacheValue = { label: '-', score: 0 };
-                difficultyAnalysisState = computeGridHasValues(finalState.values) ? 'idle' : 'idle';
+                difficultyAnalysisState = 'idle';
                 difficultyPendingModalOpen = false;
                 renderDifficulty(finalState);
                 return;
@@ -310,7 +426,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function buildDifficultyExportData() {
         const state = getState();
-        if (!computeGridHasValues(state.values)) return null;
+        if (!computeHasGridValues(state)) return null;
 
         const currentKey = buildDifficultyCacheKey(state);
         if (!currentKey) return null;
@@ -731,7 +847,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function resetImportedGridView() {
+    function resetImportedGridView(options = {}) {
+        const { autoAnalyzeDifficulty = false } = options;
+
         hideOverlayNumpad();
         setSelectedGridCell(null);
         if (typeof window.clearHighlights === 'function') {
@@ -758,8 +876,10 @@ document.addEventListener('DOMContentLoaded', function () {
             timerAwaitingFirstGridAction = false;
         }
 
-        if (typeof window.invalidateDifficultyEstimate === 'function') {
-            window.invalidateDifficultyEstimate();
+        invalidateDifficultyState({ allowDisplayAfterAction: hasAnyValue });
+
+        if (autoAnalyzeDifficulty && hasAnyValue) {
+            runDifficultySimulation({ openModalWhenDone: false });
         }
     }
 
@@ -894,6 +1014,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 td.addEventListener('click', () => {
                     if (!givenModeEl || !givenModeEl.checked) return;
                     td.classList.toggle('given');
+                    updateConflicts();
+                    callCandidatesRender();
+                    invalidateDifficultyState({ allowDisplayAfterAction: true });
                 });
 
                 td.addEventListener('pointerdown', () => {
@@ -1722,7 +1845,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     const obj = JSON.parse(reader.result);
                     validateState(obj);
                     setState(obj);
-                    resetImportedGridView();
+                    resetImportedGridView({ autoAnalyzeDifficulty: true });
                     setStatus('Import depuis fichier reussi.', 'ok');
                 } catch (err) {
                     setStatus('Erreur de parsing : ' + err.message, 'err');
@@ -1855,7 +1978,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const givens = values.map((row) => row.map((v) => v > 0));
                 const candidates = Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => []));
                 setState({ values, givens, candidates });
-                resetImportedGridView();
+                resetImportedGridView({ autoAnalyzeDifficulty: true });
                 resetPhotoPreview();
                 setStatus('Grille importee depuis la grille superposee corrigee.', 'ok');
                 return;
@@ -1891,7 +2014,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             try {
                 await importFromPhoto(pendingPhotoFile, pendingPhotoCornerRatios);
-                resetImportedGridView();
+                resetImportedGridView({ autoAnalyzeDifficulty: true });
                 resetPhotoPreview();
             } catch (err) {
                 setStatus('Echec import photo : ' + err.message, 'err');
@@ -2063,6 +2186,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 givens: Array.from({ length: SIZE }, () => Array(SIZE).fill(false))
             };
             setState(example);
+            invalidateDifficultyState({ allowDisplayAfterAction: true });
             setStatus('Exemple charge.', 'warn');
         });
     }
@@ -2101,6 +2225,7 @@ document.addEventListener('DOMContentLoaded', function () {
             updateConflicts();
             callCandidatesRender();
             setGridPlayMenuVisible(false);
+            invalidateDifficultyState({ allowDisplayAfterAction: false });
             setStatus('Grille reinitialisee.', 'ok');
         });
     }
@@ -2165,6 +2290,18 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    if (givenModeEl) {
+        givenModeEl.addEventListener('change', () => {
+            syncGivenModeUi(true);
+        });
+    }
+
+    if (givenColorPickerEl) {
+        givenColorPickerEl.addEventListener('input', () => {
+            applyGivenColor();
+        });
+    }
+
     if (burgerMenuBtn) {
         burgerMenuBtn.addEventListener('click', () => {
             if (window.innerWidth > MOBILE_BREAKPOINT) return;
@@ -2179,15 +2316,13 @@ document.addEventListener('DOMContentLoaded', function () {
     window.setStatus = setStatus;
     window.renderAllCells = renderAllCells;
     window.invalidateDifficultyEstimate = function () {
-        difficultyCacheKey = '';
-        difficultyCacheValue = { label: '-', score: 0 };
-        difficultyAnalysisState = 'idle';
-        difficultyPendingModalOpen = false;
-        renderDifficulty(getState());
+        invalidateDifficultyState({ allowDisplayAfterAction: false });
     };
 
     applyThemeByWidth();
     syncMobileToolsState();
+    syncGivenModeUi(false);
+    applyGivenColor();
 
     buildGrid();
     resetTimer();

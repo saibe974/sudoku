@@ -312,8 +312,9 @@ let techniqueDifficultyPreviewCacheKey = '';
 let techniqueDifficultyPreviewCacheValue = null;
 
 function buildTechniqueDifficultyCacheKey(state) {
-    const values = state && Array.isArray(state.values) ? state.values : [];
-    const givens = state && Array.isArray(state.givens) ? state.givens : [];
+    const sourceState = buildTechniqueDifficultySourceState(state);
+    const values = sourceState.values;
+    const givens = sourceState.givens;
     if (!values.length || !givens.length) return '';
 
     const flatValues = [];
@@ -325,6 +326,37 @@ function buildTechniqueDifficultyCacheKey(state) {
         }
     }
     return flatValues.join('') + '|' + flatGivens.join('');
+}
+
+function buildTechniqueDifficultySourceState(state) {
+    const values = state && Array.isArray(state.values) ? state.values : [];
+    const givens = state && Array.isArray(state.givens) ? state.givens : [];
+
+    if (!values.length || !givens.length) {
+        return {
+            values: Array.from({ length: 9 }, () => Array(9).fill(0)),
+            givens: Array.from({ length: 9 }, () => Array(9).fill(false)),
+            candidates: buildEmptyCandidates()
+        };
+    }
+
+    const sourceValues = Array.from({ length: 9 }, (_, r) =>
+        Array.from({ length: 9 }, (_, c) => {
+            const isGiven = !!(givens[r] && givens[r][c]);
+            const value = Number(values[r] && values[r][c] || 0);
+            return isGiven && value >= 1 && value <= 9 ? value : 0;
+        })
+    );
+
+    const sourceGivens = Array.from({ length: 9 }, (_, r) =>
+        Array.from({ length: 9 }, (_, c) => !!(givens[r] && givens[r][c] && sourceValues[r][c] >= 1 && sourceValues[r][c] <= 9))
+    );
+
+    return {
+        values: sourceValues,
+        givens: sourceGivens,
+        candidates: buildEmptyCandidates()
+    };
 }
 
 function sanitizeForSimulation() {
@@ -409,7 +441,8 @@ function findHardestUsedTechnique(stats) {
 // Retourne une estimation basee sur une simulation complete de resolution.
 // La grille visible est restauree a l'identique apres calcul.
 function peekTechniqueDifficulty() {
-    const stateSnapshot = getDeepState();
+    const fullStateSnapshot = getDeepState();
+    const stateSnapshot = buildTechniqueDifficultySourceState(fullStateSnapshot);
     const cacheKey = buildTechniqueDifficultyCacheKey(stateSnapshot);
     if (cacheKey && cacheKey === techniqueDifficultyPreviewCacheKey && techniqueDifficultyPreviewCacheValue) {
         return techniqueDifficultyPreviewCacheValue;
@@ -446,7 +479,7 @@ function peekTechniqueDifficulty() {
         solved = values.length > 0 && values.every(row => Array.isArray(row) && row.every(v => Number(v) >= 1 && Number(v) <= 9));
         score = computeDifficultyScoreFromTechniqueStats(stats);
     } finally {
-        setState(stateSnapshot);
+        setState(fullStateSnapshot);
         updateConflicts();
         renderAllCells();
         clearHighlights();
