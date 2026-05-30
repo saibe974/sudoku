@@ -1,12 +1,10 @@
 /*******************************************************
- * techniques/uniqueRectangle.js — Unique Rectangle (UR Type 1)
+ * techniques/uniqueRectangle.js — Unique Rectangle
  *
- * Si quatre cases formant un rectangle (2 lignes × 2 colonnes)
- * n'ont que les deux candidats {a,b}, et que l'une de ces cases
- * possède {a,b} + autres candidats, alors pour éviter une solution
- * multiple, on DOIT retirer a et b de cette case "extra".
+ * Implémente les variantes UR1 / UR2 / UR4.
  *
- * Implémentation: UR Type 1 uniquement (simple et sûr).
+ * Note: une ancienne heuristique UR3 (non canonique) a été retirée
+ * car elle pouvait produire des éliminations incorrectes.
  *******************************************************/
 
 window.SudokuTechniqueRegistry = window.SudokuTechniqueRegistry || [];
@@ -215,71 +213,8 @@ function findUniqueRectangleStep() {
                                 }
                             }
 
-                            // === UR Type 3: 2 pures + (au moins) 1 extra avec lien fort (row/col/bloc) sur un candidat x (≠ a,b)
-                            if (pure.length === 2 && extras.length >= 1) {
-                                for (const ex of extras) {
-                                    const extraDigits = ex.cand.filter(x => x !== a && x !== b);
-                                    if (extraDigits.length === 0) continue;
-
-                                    const r = ex.r, c = ex.c;
-                                    // Cherche un lien fort sur x dans la ligne, colonne ou bloc
-                                    const houses = [];
-                                    for (const x of extraDigits) {
-                                        // Ligne
-                                        let cnt = 0; let includesSelf = false;
-                                        for (let cc = 0; cc < 9; cc++) {
-                                            if (values[r][cc] !== 0) continue;
-                                            const here = candidates[r][cc] || [];
-                                            if (here.includes(x)) { cnt++; if (cc === c) includesSelf = true; }
-                                        }
-                                        if (includesSelf && cnt === 2) { houses.push({ kind: 'ligne', id: r + 1, x }); break; }
-
-                                        // Colonne
-                                        cnt = 0; includesSelf = false;
-                                        for (let rr = 0; rr < 9; rr++) {
-                                            if (values[rr][c] !== 0) continue;
-                                            const here = candidates[rr][c] || [];
-                                            if (here.includes(x)) { cnt++; if (rr === r) includesSelf = true; }
-                                        }
-                                        if (includesSelf && cnt === 2) { houses.push({ kind: 'colonne', id: c + 1, x }); break; }
-
-                                        // Bloc
-                                        const br0 = Math.floor(r / 3) * 3, bc0 = Math.floor(c / 3) * 3;
-                                        cnt = 0; includesSelf = false;
-                                        for (let rr = br0; rr < br0 + 3; rr++) {
-                                            for (let cc = bc0; cc < bc0 + 3; cc++) {
-                                                if (values[rr][cc] !== 0) continue;
-                                                const here = candidates[rr][cc] || [];
-                                                if (here.includes(x)) { cnt++; if (rr === r && cc === c) includesSelf = true; }
-                                            }
-                                        }
-                                        if (includesSelf && cnt === 2) {
-                                            const blkId = Math.floor(r / 3) * 3 + Math.floor(c / 3) + 1;
-                                            houses.push({ kind: 'bloc', id: blkId, x });
-                                            break;
-                                        }
-                                    }
-
-                                    if (houses.length > 0) {
-                                        // On peut retirer {a,b} de cette case extra
-                                        const removeAB = [a, b].filter(d => (candidates[r][c] || []).includes(d));
-                                        if (removeAB.length) {
-                                            const rect = cells;
-                                            const h = houses[0];
-                                            return {
-                                                technique: 'Unique Rectangle',
-                                                type: 'UR3',
-                                                digits: [a, b],
-                                                rect,
-                                                target: { r, c },
-                                                kills: [{ r, c, remove: removeAB }],
-                                                explanation: `Unique Rectangle (type 3) avec {${a},${b}} → à (${r + 1},${c + 1}), le candidat ${h.x} a un lien fort dans la ${h.kind} ${h.id}; pour éviter une solution multiple, on enlève {${a},${b}} de cette case (forçant ${h.x}).`,
-                                                video: 'https://youtube.com/shorts/RTxhN63e8YA?si=aDMpOkYnPW4KNwRo'
-                                            };
-                                        }
-                                    }
-                                }
-                            }
+                            // UR3 désactivé: l'ancienne heuristique supprimait parfois des candidats valides.
+                            // Mieux vaut ne pas proposer d'étape UR3 que produire une élimination fausse.
 
                             // === UR Type 1: 3 pures + 1 extra → retirer {a,b} de la case extra
                             if (pure.length === 3 && extras.length === 1) {
@@ -320,7 +255,7 @@ function applyUniqueRectangleStep(step) {
     // Mettre en avant {a,b} dans les 4 cases (keep)
     rect.forEach(({ r, c }) => digits.forEach(d => highlightCandidate(r, c, d, 'keep')));
 
-    // Retirer {a,b} de la case extra
+    // Appliquer les suppressions de candidats proposées par l'étape
     kills.forEach(({ r, c, remove }) => {
         remove.forEach(d => highlightCandidate(r, c, d, 'kill'));
         candidates[r][c] = (candidates[r][c] || []).filter(x => !remove.includes(x));
