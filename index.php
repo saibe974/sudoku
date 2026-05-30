@@ -169,6 +169,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
             <svg class="corner-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               <polygon id="photoCornersPolygon" points="" />
             </svg>
+            <div id="photoFeaturePoints" class="photo-feature-points" aria-hidden="true"></div>
             <span class="corner-marker" data-corner="0"></span>
             <span class="corner-marker" data-corner="1"></span>
             <span class="corner-marker" data-corner="2"></span>

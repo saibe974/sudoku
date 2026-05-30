@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const photoPreviewFrameEl = document.getElementById('photoPreviewFrame');
     const photoCornersOverlayEl = document.getElementById('photoCornersOverlay');
     const photoCornersPolygonEl = document.getElementById('photoCornersPolygon');
+    const photoFeaturePointsEl = document.getElementById('photoFeaturePoints');
     const overlayNumpadEl = document.getElementById('overlayNumpad');
     const photoNextStepBtn = document.getElementById('photoNextStepBtn');
     const photoPrevStepBtn = document.getElementById('photoPrevStepBtn');
@@ -63,6 +64,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let pendingPhotoFile = null;
     let pendingPhotoUrl = null;
     let pendingPhotoCornerRatios = null;
+    let pendingPhotoFeatureRatios = [];
     let pendingWarpValues = null;
     let pendingWarpAnalysis = null;
     let pendingWarpGrayBase = null;
@@ -1672,6 +1674,7 @@ document.addEventListener('DOMContentLoaded', function () {
         hideOverlayNumpad();
         pendingPhotoFile = null;
         pendingPhotoCornerRatios = null;
+        pendingPhotoFeatureRatios = [];
         pendingWarpValues = null;
         pendingWarpAnalysis = null;
         usingFallbackCorners = false;
@@ -1711,6 +1714,10 @@ document.addEventListener('DOMContentLoaded', function () {
             photoCornersOverlayEl.querySelectorAll('.corner-marker').forEach((m) => m.classList.remove('dragging'));
         }
 
+        if (photoFeaturePointsEl) {
+            photoFeaturePointsEl.innerHTML = '';
+        }
+
         if (photoWarpPanelEl) {
             photoWarpPanelEl.hidden = true;
         }
@@ -1740,6 +1747,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pendingPhotoFile = file;
         pendingPhotoUrl = URL.createObjectURL(file);
         usingFallbackCorners = false;
+        pendingPhotoFeatureRatios = [];
 
         if (photoPreviewImgEl) {
             photoPreviewImgEl.src = pendingPhotoUrl;
@@ -1766,6 +1774,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (photoCornersOverlayEl) {
             photoCornersOverlayEl.hidden = true;
+        }
+
+        if (photoFeaturePointsEl) {
+            photoFeaturePointsEl.innerHTML = '';
         }
 
         if (photoWarpPanelEl) {
@@ -2199,6 +2211,20 @@ document.addEventListener('DOMContentLoaded', function () {
     function renderPreviewCorners() {
         if (!photoCornersOverlayEl || !photoPreviewImgEl) return;
         photoCornersOverlayEl.classList.toggle('fallback-corners', usingFallbackCorners);
+        if (photoFeaturePointsEl) {
+            if (Array.isArray(pendingPhotoFeatureRatios) && pendingPhotoFeatureRatios.length) {
+                photoFeaturePointsEl.innerHTML = pendingPhotoFeatureRatios.map((point) => {
+                    const x = ((Number(point.x) || 0) * 100).toFixed(3);
+                    const y = ((Number(point.y) || 0) * 100).toFixed(3);
+                    const type = point.type || 'corner';
+                    const arms = Array.isArray(point.arms) && point.arms.length ? ' [' + point.arms.join(', ') + ']' : '';
+                    return '<span class="photo-feature-point ' + type + '" style="left:' + x + '%;top:' + y + '%;" title="'
+                        + type + arms + '"></span>';
+                }).join('');
+            } else {
+                photoFeaturePointsEl.innerHTML = '';
+            }
+        }
         if (!pendingPhotoCornerRatios || pendingPhotoCornerRatios.length !== 4) {
             photoCornersOverlayEl.hidden = true;
             if (photoCornersPolygonEl) photoCornersPolygonEl.setAttribute('points', '');
@@ -2241,6 +2267,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }));
         renderPreviewCorners();
         clearWarpPreview();
+    }
+
+    function setPreviewFeaturePoints(points, imageWidth, imageHeight) {
+        if (!Array.isArray(points) || !imageWidth || !imageHeight) {
+            pendingPhotoFeatureRatios = [];
+            renderPreviewCorners();
+            return;
+        }
+
+        pendingPhotoFeatureRatios = points.map((point) => ({
+            x: clamp01((Number(point.x) || 0) / imageWidth),
+            y: clamp01((Number(point.y) || 0) / imageHeight),
+            type: point.type || 'corner',
+            arms: Array.isArray(point.arms) ? point.arms.slice() : []
+        }));
+        renderPreviewCorners();
     }
 
     function getImageBoundaryCorners(imageWidth, imageHeight) {
@@ -2346,21 +2388,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(async (img) => {
                     await getPictureApi().ensureCvReady();
                     const detected = getPictureApi().detectSudokuCorners(img);
+                    setPreviewFeaturePoints(detected.featurePoints || [], detected.imageWidth, detected.imageHeight);
                     if (detected.points) {
                         usingFallbackCorners = false;
                         setPreviewCornersFromPoints(detected.points, detected.imageWidth, detected.imageHeight);
                         hasManualCornerEdits = false;
-                        setStatus('Photo chargee. Les 4 coins detectes sont affiches.', 'ok');
+                        setStatus('Photo chargee. Les 4 coins detectes sont affiches avec ' + (detected.featurePoints || []).length + ' points de structure.', 'ok');
                     } else {
                         usingFallbackCorners = true;
                         const fallback = getImageBoundaryCorners(detected.imageWidth, detected.imageHeight);
                         setPreviewCornersFromPoints(fallback, detected.imageWidth, detected.imageHeight);
                         hasManualCornerEdits = true;
-                        setStatus('Coins non detectes: coins de secours affiches en rouge. Ajuste-les manuellement puis clique sur Etape suivante.', 'warn');
+                        setStatus('Coins non detectes: coins de secours affiches en rouge. ' + (detected.featurePoints || []).length + ' points de structure sont affiches pour guider le cadrage.', 'warn');
                     }
                 })
                 .catch(() => {
                     usingFallbackCorners = true;
+                    pendingPhotoFeatureRatios = [];
+                    if (photoFeaturePointsEl) {
+                        photoFeaturePointsEl.innerHTML = '';
+                    }
                     const w = Number(photoPreviewImgEl && photoPreviewImgEl.naturalWidth ? photoPreviewImgEl.naturalWidth : 0);
                     const h = Number(photoPreviewImgEl && photoPreviewImgEl.naturalHeight ? photoPreviewImgEl.naturalHeight : 0);
                     const fallback = getImageBoundaryCorners(w, h);

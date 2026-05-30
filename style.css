@@ -1093,6 +1093,12 @@ body.theme-light #photoPreviewImg {
     height: 100%;
 }
 
+.photo-feature-points {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
 #photoCornersPolygon {
     fill: rgba(37, 99, 235, 0.12);
     stroke: #93c5fd;
@@ -1128,6 +1134,34 @@ body.theme-light #photoPreviewImg {
     cursor: grabbing;
     background: #1d4ed8;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.38);
+}
+
+.photo-feature-point {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.28);
+    opacity: 0.9;
+}
+
+.photo-feature-point.cross {
+    background: #f59e0b;
+}
+
+.photo-feature-point.corner {
+    background: #10b981;
+}
+
+.photo-feature-point.tee {
+    background: #fb7185;
+}
+
+body.theme-light .photo-feature-point {
+    border-color: rgba(15, 23, 42, 0.7);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
 }
 
 .photo-warp {

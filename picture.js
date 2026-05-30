@@ -59,6 +59,173 @@
         return [top[0], top[1], bottom[1], bottom[0]];
     }
 
+    function getExpandedBounds(points, width, height, padding = 0) {
+        if (!Array.isArray(points) || points.length === 0) {
+            return { x0: 0, y0: 0, x1: Math.max(0, width - 1), y1: Math.max(0, height - 1) };
+        }
+
+        let minX = Number.POSITIVE_INFINITY;
+        let minY = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        let maxY = Number.NEGATIVE_INFINITY;
+
+        points.forEach((point) => {
+            minX = Math.min(minX, Number(point.x) || 0);
+            minY = Math.min(minY, Number(point.y) || 0);
+            maxX = Math.max(maxX, Number(point.x) || 0);
+            maxY = Math.max(maxY, Number(point.y) || 0);
+        });
+
+        return {
+            x0: Math.max(0, Math.floor(minX - padding)),
+            y0: Math.max(0, Math.floor(minY - padding)),
+            x1: Math.min(width - 1, Math.ceil(maxX + padding)),
+            y1: Math.min(height - 1, Math.ceil(maxY + padding))
+        };
+    }
+
+    function mergeNearbyFeaturePoints(points, mergeDistance) {
+        if (!Array.isArray(points) || points.length === 0) return [];
+
+        const sorted = points.slice().sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+        const clusters = [];
+        const mergeDistanceSq = mergeDistance * mergeDistance;
+
+        sorted.forEach((point) => {
+            let cluster = null;
+            for (let i = 0; i < clusters.length; i++) {
+                const current = clusters[i];
+                if (current.type !== point.type) continue;
+                const dx = current.x - point.x;
+                const dy = current.y - point.y;
+                if ((dx * dx) + (dy * dy) <= mergeDistanceSq) {
+                    cluster = current;
+                    break;
+                }
+            }
+
+            if (!cluster) {
+                clusters.push({
+                    x: point.x,
+                    y: point.y,
+                    type: point.type,
+                    score: Number(point.score || 0),
+                    count: 1,
+                    arms: Array.isArray(point.arms) ? point.arms.slice() : []
+                });
+                return;
+            }
+
+            const total = cluster.count + 1;
+            cluster.x = ((cluster.x * cluster.count) + point.x) / total;
+            cluster.y = ((cluster.y * cluster.count) + point.y) / total;
+            cluster.score = Math.max(cluster.score, Number(point.score || 0));
+            cluster.count = total;
+            cluster.arms = Array.from(new Set((cluster.arms || []).concat(point.arms || [])));
+        });
+
+        return clusters.map((point) => ({
+            x: Math.round(point.x),
+            y: Math.round(point.y),
+            type: point.type,
+            score: point.score,
+            arms: point.arms
+        }));
+    }
+
+    function detectFeaturePointsFromBinary(binaryMat, focusBounds = null) {
+        if (!binaryMat || !binaryMat.cols || !binaryMat.rows) return [];
+
+        const width = binaryMat.cols;
+        const height = binaryMat.rows;
+        const minDim = Math.max(1, Math.min(width, height));
+        const scanStep = Math.max(1, Math.floor(minDim / 260));
+        const armLength = Math.max(8, Math.floor(minDim / 40));
+        const centerGap = Math.max(2, Math.floor(armLength * 0.18));
+        const thickness = Math.max(1, Math.floor(armLength * 0.12));
+        const mergeDistance = Math.max(8, Math.floor(armLength * 0.55));
+        const margin = armLength + 2;
+        const bounds = focusBounds || { x0: 0, y0: 0, x1: width - 1, y1: height - 1 };
+
+        const isDark = (x, y) => {
+            if (x < 0 || x >= width || y < 0 || y >= height) return false;
+            return binaryMat.ucharPtr(y, x)[0] > 0;
+        };
+
+        const sampleDirection = (x, y, dx, dy) => {
+            let hits = 0;
+            let maxRun = 0;
+            let run = 0;
+            const total = Math.max(1, armLength - centerGap + 1);
+
+            for (let dist = centerGap; dist <= armLength; dist++) {
+                let darkHits = 0;
+                let samples = 0;
+                for (let offset = -thickness; offset <= thickness; offset++) {
+                    const sx = dx === 0 ? x + offset : x + (dx * dist);
+                    const sy = dy === 0 ? y + offset : y + (dy * dist);
+                    if (isDark(sx, sy)) darkHits++;
+                    samples++;
+                }
+
+                if (darkHits >= Math.max(1, Math.ceil(samples * 0.45))) {
+                    hits++;
+                    run++;
+                    maxRun = Math.max(maxRun, run);
+                } else {
+                    run = 0;
+                }
+            }
+
+            return {
+                active: hits >= Math.ceil(total * 0.42) && maxRun >= Math.ceil(total * 0.25),
+                strength: hits + (maxRun * 0.7)
+            };
+        };
+
+        const features = [];
+
+        for (let y = Math.max(margin, bounds.y0); y <= Math.min(height - 1 - margin, bounds.y1); y += scanStep) {
+            for (let x = Math.max(margin, bounds.x0); x <= Math.min(width - 1 - margin, bounds.x1); x += scanStep) {
+                if (!isDark(x, y)) continue;
+
+                let localDark = 0;
+                for (let yy = -1; yy <= 1; yy++) {
+                    for (let xx = -1; xx <= 1; xx++) {
+                        if (isDark(x + xx, y + yy)) localDark++;
+                    }
+                }
+                if (localDark < 4) continue;
+
+                const up = sampleDirection(x, y, 0, -1);
+                const down = sampleDirection(x, y, 0, 1);
+                const left = sampleDirection(x, y, -1, 0);
+                const right = sampleDirection(x, y, 1, 0);
+                const arms = [];
+                if (up.active) arms.push('up');
+                if (down.active) arms.push('down');
+                if (left.active) arms.push('left');
+                if (right.active) arms.push('right');
+
+                if (arms.length < 2) continue;
+
+                const hasVertical = up.active || down.active;
+                const hasHorizontal = left.active || right.active;
+                const straightOnly = (up.active && down.active && !left.active && !right.active)
+                    || (left.active && right.active && !up.active && !down.active);
+                if (!hasVertical || !hasHorizontal || straightOnly) continue;
+
+                const type = arms.length >= 4 ? 'cross' : (arms.length === 3 ? 'tee' : 'corner');
+                const score = up.strength + down.strength + left.strength + right.strength;
+                features.push({ x, y, type, score, arms });
+            }
+        }
+
+        return mergeNearbyFeaturePoints(features, mergeDistance)
+            .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
+            .slice(0, 250);
+    }
+
     function detectSudokuCorners(imageEl) {
         const sourceCanvas = buildSourceCanvasFromImage(imageEl);
 
@@ -143,15 +310,22 @@
         }
 
         let points = null;
+        let featurePoints = [];
         if (bestQuad && bestArea > 5000) {
             points = [];
             for (let i = 0; i < 4; i++) {
                 const p = bestQuad.intPtr(i, 0);
                 points.push({ x: p[0], y: p[1] });
             }
+            featurePoints = detectFeaturePointsFromBinary(
+                thresh,
+                getExpandedBounds(points, thresh.cols, thresh.rows, Math.max(12, Math.floor(Math.min(thresh.cols, thresh.rows) * 0.03)))
+            );
             points = orderQuadPoints(points);
             points = shrinkQuadToBlack(points);
             bestQuad.delete();
+        } else {
+            featurePoints = detectFeaturePointsFromBinary(thresh);
         }
 
         src.delete();
@@ -163,6 +337,7 @@
 
         return {
             points,
+            featurePoints,
             imageWidth: sourceCanvas.width,
             imageHeight: sourceCanvas.height
         };
@@ -355,6 +530,7 @@
         buildSourceCanvasFromImage,
         ensureCvReady,
         orderQuadPoints,
+        detectFeaturePointsFromBinary,
         detectSudokuCorners,
         ratiosToPixels,
         warpImageFromCorners,
