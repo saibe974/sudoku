@@ -620,14 +620,20 @@ document.addEventListener('DOMContentLoaded', function () {
             resetMoveHistoryFromState(prevState || getState());
         }
 
-        const changes = buildMoveChanges(prevState, nextState);
+        const prevSnapshot = cloneHistorySnapshotState(prevState || getState());
+        const nextSnapshot = cloneHistorySnapshotState(nextState || getState());
+        const changes = buildMoveChanges(prevSnapshot, nextSnapshot);
         if (!changes.length) return false;
 
         if (moveHistoryCursor < moveHistoryMoves.length - 1) {
             moveHistoryMoves = moveHistoryMoves.slice(0, moveHistoryCursor + 1);
         }
 
-        moveHistoryMoves.push({ c: changes });
+        moveHistoryMoves.push({
+            c: changes,
+            cb: cloneCandidatesGrid(prevSnapshot.candidates),
+            ca: cloneCandidatesGrid(nextSnapshot.candidates)
+        });
         moveHistoryCursor = moveHistoryMoves.length - 1;
 
         if (moveHistoryMoves.length > 5000) {
@@ -639,15 +645,15 @@ document.addEventListener('DOMContentLoaded', function () {
         return true;
     }
 
-    function applyMoveChanges(changes, useToValues) {
-        if (!Array.isArray(changes) || !changes.length) return;
+    function applyMoveChanges(move, useToValues) {
+        if (!move || !Array.isArray(move.c) || !move.c.length) return;
 
         const current = getState();
         const nextValues = current.values.map((row) => row.slice());
         const nextGivens = current.givens.map((row) => row.slice());
 
-        for (let i = 0; i < changes.length; i++) {
-            const change = changes[i];
+        for (let i = 0; i < move.c.length; i++) {
+            const change = move.c[i];
             if (!Array.isArray(change) || change.length !== 5) continue;
             const idx = Number(change[0]);
             if (!Number.isInteger(idx) || idx < 0 || idx >= SIZE * SIZE) continue;
@@ -661,10 +667,17 @@ document.addEventListener('DOMContentLoaded', function () {
             nextGivens[r][c] = given;
         }
 
+        const hasTargetCandidates = useToValues
+            ? Array.isArray(move.ca)
+            : Array.isArray(move.cb);
+        const nextCandidates = hasTargetCandidates
+            ? cloneCandidatesGrid(useToValues ? move.ca : move.cb)
+            : current.candidates;
+
         setState({
             values: nextValues,
             givens: nextGivens,
-            candidates: current.candidates
+            candidates: nextCandidates
         });
         refreshGridPlayMenuVisibility();
     }
@@ -677,7 +690,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const move = moveHistoryMoves[moveHistoryCursor];
-        applyMoveChanges(move && move.c, false);
+        applyMoveChanges(move, false);
         moveHistoryCursor -= 1;
         renderMoveHistoryButtons();
         setStatus('Coup precedent restaure.', 'ok');
@@ -691,7 +704,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const move = moveHistoryMoves[moveHistoryCursor + 1];
-        applyMoveChanges(move && move.c, true);
+        applyMoveChanges(move, true);
         moveHistoryCursor += 1;
         renderMoveHistoryButtons();
         setStatus('Coup suivant applique.', 'ok');
@@ -740,10 +753,13 @@ document.addEventListener('DOMContentLoaded', function () {
             v: 1,
             base: {
                 v: moveHistoryBase.v,
-                g: moveHistoryBase.g
+                g: moveHistoryBase.g,
+                candidates: cloneCandidatesGrid(moveHistoryBaseSnapshot && moveHistoryBaseSnapshot.candidates)
             },
             moves: moveHistoryMoves.map((move) => ({
-                c: Array.isArray(move && move.c) ? move.c : []
+                c: Array.isArray(move && move.c) ? move.c : [],
+                cb: cloneCandidatesGrid(move && move.cb),
+                ca: cloneCandidatesGrid(move && move.ca)
             })),
             cursor: Number(moveHistoryCursor)
         };
@@ -785,7 +801,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     parsedChanges.push([idx, fromV, fromG, toV, toG]);
                 }
 
-                parsedMoves.push({ c: parsedChanges });
+                parsedMoves.push({
+                    c: parsedChanges,
+                    cb: cloneCandidatesGrid(move.cb),
+                    ca: cloneCandidatesGrid(move.ca)
+                });
             }
 
             moveHistoryBase = { v: base.v, g: base.g };
@@ -850,7 +870,11 @@ document.addEventListener('DOMContentLoaded', function () {
             let prev = baseState;
             for (let i = 0; i < snapshots.length; i++) {
                 const next = snapshots[i];
-                compactMoves.push({ c: buildMoveChanges(prev, next) });
+                compactMoves.push({
+                    c: buildMoveChanges(prev, next),
+                    cb: cloneCandidatesGrid(prev.candidates),
+                    ca: cloneCandidatesGrid(next.candidates)
+                });
                 prev = next;
             }
 
@@ -879,12 +903,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function captureStateBeforeMove() {
-        return cloneHistoryState(getState());
+        return cloneHistorySnapshotState(getState());
     }
 
     function recordMoveAfterMutation(beforeState) {
         if (!beforeState) return false;
-        const afterState = cloneHistoryState(getState());
+        const afterState = cloneHistorySnapshotState(getState());
         const recorded = pushMoveFromStates(beforeState, afterState);
         if (recorded) {
             notifyGridActionForTimer();
