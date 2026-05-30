@@ -104,7 +104,36 @@ define('MODE', 'debug'); // 'debug' or 'production'
           <button class="btn grid-play-btn" id="gridMenuCandidatesBtn" type="button" title="Afficher/masquer les candidats" aria-label="Afficher ou masquer les candidats"><i data-lucide="grid-3x3"></i></button>
           <button class="btn grid-play-btn" id="gridMenuSanitizeBtn" type="button" title="Nettoyer les candidats invalides" aria-label="Nettoyer les candidats"><i data-lucide="eraser"></i></button>
           <button class="btn grid-play-btn" id="gridMenuHintBtn" type="button" title="Proposer un indice" aria-label="Indice"><i data-lucide="lightbulb"></i></button>
-          <button class="btn grid-play-btn" id="gridMenuSolveBtn" type="button" title="Appliquer un pas de resolution" aria-label="Resolution"><i data-lucide="play"></i></button>
+          <!-- <button class="btn grid-play-btn" id="gridMenuSolveBtn" type="button" title="Appliquer un pas de resolution" aria-label="Resolution"><i data-lucide="play"></i></button> -->
+        </div>
+
+        <div id="resolutionOverlay" class="resolution-overlay" hidden aria-live="polite">
+          <div class="resolution-overlay-panel" role="dialog" aria-modal="false" aria-label="Assistant de resolution">
+            <div class="resolution-overlay-header">
+              <div class="resolution-overlay-icon-actions" aria-label="Actions resolution">
+                <button class="btn xs resolution-overlay-icon-btn primary" id="resolutionOverlayNextBtn" type="button" title="Etape suivante" aria-label="Etape suivante">
+                  <i data-lucide="chevron-right"></i>
+                </button>
+                <button class="btn xs resolution-overlay-icon-btn" id="resolutionOverlayCloseBtn" type="button" title="Fermer" aria-label="Fermer la fenetre">
+                  <i data-lucide="x"></i>
+                </button>
+              </div>
+            </div>
+            <div id="resolutionOverlayBody" class="resolution-overlay-body"></div>
+            <div class="resolution-overlay-actions">
+              <button class="btn xs" id="resolutionOverlayVideoBtn" type="button" hidden>Voir la video</button>
+            </div>
+          </div>
+
+          <div id="resolutionOverlayVideoPanel" class="resolution-overlay-video" hidden>
+            <div class="resolution-overlay-video-header">
+              <strong>Video technique</strong>
+              <button class="btn xs" id="resolutionOverlayVideoCloseBtn" type="button">Fermer la video</button>
+            </div>
+            <div class="video-container">
+              <iframe id="resolutionOverlayVideoFrame" src="" title="Video de resolution" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -188,39 +217,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
 
       
     </section>
-
-    <aside class="card right-panel">
-      <h3 style="margin-top:0">Explications :</h3>
-      <div class="explanations-menu" aria-label="Navigation des explications">
-        <button class="btn xs" id="explanationsPrevBtn" type="button" title="Voir l'explication précédente" aria-label="Explication précédente" disabled>
-          <i data-lucide="chevron-up"></i>
-          Précédent
-        </button>
-        <button class="btn xs" id="explanationsNextBtn" type="button" title="Voir l'explication suivante" aria-label="Explication suivante" disabled>
-          <i data-lucide="chevron-down"></i>
-          Suivant
-        </button>
-        <button class="btn xs" id="explanationsClearBtn" type="button" title="Effacer la liste des explications" aria-label="Effacer la liste des explications" disabled>
-          <i data-lucide="trash-2"></i>
-          Effacer
-        </button>
-      </div>
-      <!-- <div class="meta">Tu peux coller/éditer ici. Format :
-        <code>{"values": number[9][9], "givens": boolean[9][9], "candidates": number[][][]}</code>
-      </div>
-      <textarea id="jsonArea" placeholder='{"values":[[0,0,0,...],[...]], "givens":[[false,false,...],[...]], "candidates":[[[],[],...],[...]]}'></textarea> -->
-      <div id="explanations" class="grid-wrapper">
-      </div>
-      
-      <div class="grid-footer">
-        <!-- <button class="btn" id="importBtn">Importer depuis la zone</button> -->
-        <!-- <button class="btn" id="copyBtn">Copier le JSON</button> -->
-        
-      </div>
-    </aside>
   </div>
-
-  <div id="status" class="status">Prêt.</div>
 
   <!-- Popover candidats -->
   <div id="candPopover" class="cand-popover" aria-hidden="true">

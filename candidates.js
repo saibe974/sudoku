@@ -179,6 +179,9 @@
             candidatesVisible = !candidatesVisible;
 
             if (candidatesVisible) {
+                if (typeof window.incrementDemandCounter === 'function') {
+                    window.incrementDemandCounter('candidates');
+                }
                 // Générer les candidats s'ils n'existent pas
                 const state = window.getState();
                 const hasCandidates = hasAnyCandidates(state);
@@ -218,6 +221,9 @@
 
     if (sanitizeCandidatesBtn) {
         sanitizeCandidatesBtn.addEventListener('click', function () {
+            if (typeof window.incrementDemandCounter === 'function') {
+                window.incrementDemandCounter('candidates');
+            }
             window.sanitizeCandidates();
             if (typeof window.setStatus === 'function') {
                 window.setStatus('Candidats invalides nettoyes (ligne, colonne, bloc).', 'ok');

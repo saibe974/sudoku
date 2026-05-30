@@ -310,6 +310,14 @@ const TECHNIQUE_DIFFICULTY_RANK = {
 const EXPERT_TECHNIQUES = new Set(['boxline', 'uniqueRectangle', 'xwing', 'ywing', 'swordfish', 'xywing']);
 let techniqueDifficultyPreviewCacheKey = '';
 let techniqueDifficultyPreviewCacheValue = null;
+let guidedResolutionState = {
+    open: false,
+    mode: 'hint',
+    phase: 1,
+    step: null,
+    prevMobileGridDigitsHidden: null,
+    prevGridPlayMenuHidden: null
+};
 
 function buildTechniqueDifficultyCacheKey(state) {
     const sourceState = buildTechniqueDifficultySourceState(state);
@@ -569,6 +577,266 @@ function toEmbedUrl(url) {
     return '';
 }
 
+function getGuidedResolutionElements() {
+    return {
+        overlay: document.getElementById('resolutionOverlay'),
+        body: document.getElementById('resolutionOverlayBody'),
+        nextBtn: document.getElementById('resolutionOverlayNextBtn'),
+        closeBtn: document.getElementById('resolutionOverlayCloseBtn'),
+        videoBtn: document.getElementById('resolutionOverlayVideoBtn'),
+        videoPanel: document.getElementById('resolutionOverlayVideoPanel'),
+        videoCloseBtn: document.getElementById('resolutionOverlayVideoCloseBtn'),
+        videoFrame: document.getElementById('resolutionOverlayVideoFrame')
+    };
+}
+
+function closeGuidedResolutionVideo() {
+    const { videoPanel, videoFrame } = getGuidedResolutionElements();
+    if (videoPanel) {
+        videoPanel.hidden = true;
+    }
+    if (videoFrame) {
+        videoFrame.src = '';
+    }
+}
+
+function enforceGuidedResolutionHiddenControls() {
+    if (!guidedResolutionState.open) return;
+    const mobileGridDigits = document.getElementById('mobileGridDigits');
+    const gridPlayMenu = document.getElementById('gridPlayMenu');
+    if (mobileGridDigits) {
+        mobileGridDigits.hidden = true;
+    }
+    if (gridPlayMenu) {
+        gridPlayMenu.hidden = true;
+    }
+}
+
+function previewGuidedResolutionHighlights(step) {
+    if (!step) return;
+    const tech = window.SudokuTechniqueRegistry.find(t => t.key === step.key);
+    if (!tech || typeof tech.applier !== 'function') return;
+
+    const snapshot = getDeepState();
+    const prevStatus = document.getElementById('status')?.textContent || '';
+
+    clearHighlights();
+    try {
+        tech.applier(step);
+    } catch (_) {
+        clearHighlights();
+    }
+
+    setState(snapshot);
+    updateConflicts();
+    renderAllCells();
+    if (Array.isArray(snapshot.candidates)) {
+        window.candidates = structuredClone(snapshot.candidates);
+    }
+    if (typeof setStatus === 'function' && prevStatus) {
+        setStatus(prevStatus);
+    }
+    enforceGuidedResolutionHiddenControls();
+}
+
+function getGuidedResolutionStepVideoUrl(step, tech) {
+    const raw = (step && step.video) || (tech && tech.video) || '';
+    return raw ? toEmbedUrl(raw) : '';
+}
+
+function renderGuidedResolutionOverlay() {
+    const els = getGuidedResolutionElements();
+    const step = guidedResolutionState.step;
+    if (!els.overlay || !step) return;
+
+    const tech = window.SudokuTechniqueRegistry.find(t => t.key === step.key);
+    const difficulty = TECHNIQUE_DIFFICULTY[step.key] || 'basic';
+    const techLabel = tech && tech.label ? tech.label : step.key;
+    const phase = guidedResolutionState.phase;
+    const embedUrl = getGuidedResolutionStepVideoUrl(step, tech);
+
+    if (els.nextBtn) {
+        let nextTitle = 'Voir l\'explication';
+        if (phase === 1) {
+            nextTitle = 'Voir l\'explication';
+        } else {
+            nextTitle = 'Appliquer la technique';
+        }
+        els.nextBtn.title = nextTitle;
+        els.nextBtn.setAttribute('aria-label', nextTitle);
+    }
+
+    if (els.videoBtn) {
+        const canShowVideo = phase === 2 && !!embedUrl;
+        els.videoBtn.hidden = !canShowVideo;
+        els.videoBtn.disabled = !canShowVideo;
+    }
+
+    if (els.body) {
+        if (phase === 1) {
+            els.body.innerHTML = `
+                <h4 class="technique-name ${difficulty}">Technique: ${techLabel}</h4>
+            `;
+        } else {
+            els.body.innerHTML = `
+                <h4 class="technique-name ${difficulty}">${techLabel}</h4>
+                <p>${step.explanation || 'Pas d\'explication disponible.'}</p>
+            `;
+        }
+    }
+
+    enforceGuidedResolutionHiddenControls();
+}
+
+function setGuidedResolutionPhase(phase) {
+    if (!guidedResolutionState.open || !guidedResolutionState.step) return;
+    const safePhase = Math.max(1, Math.min(2, Number(phase) || 1));
+    guidedResolutionState.phase = safePhase;
+
+    if (safePhase === 2) {
+        previewGuidedResolutionHighlights(guidedResolutionState.step);
+    } else {
+        clearHighlights();
+        closeGuidedResolutionVideo();
+    }
+
+    renderGuidedResolutionOverlay();
+    enforceGuidedResolutionHiddenControls();
+}
+
+function closeGuidedResolutionOverlay() {
+    const { overlay } = getGuidedResolutionElements();
+    if (!overlay) return;
+
+    const mobileGridDigits = document.getElementById('mobileGridDigits');
+    const gridPlayMenu = document.getElementById('gridPlayMenu');
+
+    if (mobileGridDigits && guidedResolutionState.prevMobileGridDigitsHidden !== null) {
+        mobileGridDigits.hidden = !!guidedResolutionState.prevMobileGridDigitsHidden;
+    }
+    if (gridPlayMenu && guidedResolutionState.prevGridPlayMenuHidden !== null) {
+        gridPlayMenu.hidden = !!guidedResolutionState.prevGridPlayMenuHidden;
+    }
+
+    overlay.hidden = true;
+    guidedResolutionState.open = false;
+    guidedResolutionState.phase = 1;
+    guidedResolutionState.step = null;
+    guidedResolutionState.prevMobileGridDigitsHidden = null;
+    guidedResolutionState.prevGridPlayMenuHidden = null;
+    closeGuidedResolutionVideo();
+    clearHighlights();
+}
+
+function applyGuidedResolutionStep() {
+    const step = guidedResolutionState.step;
+    if (!step) return;
+
+    clearHighlights();
+    displayExplanation(step);
+    applyStep(step);
+    closeGuidedResolutionOverlay();
+}
+
+function toggleGuidedResolutionVideo() {
+    const { videoPanel, videoFrame } = getGuidedResolutionElements();
+    const step = guidedResolutionState.step;
+    if (!videoPanel || !videoFrame || !step) return;
+
+    const tech = window.SudokuTechniqueRegistry.find(t => t.key === step.key);
+    const embed = getGuidedResolutionStepVideoUrl(step, tech);
+    if (!embed) {
+        setStatus('Aucune video disponible pour cette technique.', 'warn');
+        return;
+    }
+
+    const isOpen = !videoPanel.hidden;
+    if (isOpen) {
+        closeGuidedResolutionVideo();
+        return;
+    }
+
+    videoFrame.src = embed;
+    videoPanel.hidden = false;
+}
+
+function openGuidedResolutionOverlay(mode, step) {
+    if (!step) {
+        setStatus('Aucune etape disponible pour cette technique.', 'warn');
+        return;
+    }
+
+    const { overlay } = getGuidedResolutionElements();
+    if (!overlay) {
+        if (mode === 'solution') {
+            displayExplanation(step);
+            applyStep(step);
+        } else {
+            displayHint(step);
+        }
+        return;
+    }
+
+    guidedResolutionState.open = true;
+    guidedResolutionState.mode = mode === 'solution' ? 'solution' : 'hint';
+    guidedResolutionState.phase = 1;
+    guidedResolutionState.step = step;
+
+    const mobileGridDigits = document.getElementById('mobileGridDigits');
+    const gridPlayMenu = document.getElementById('gridPlayMenu');
+
+    guidedResolutionState.prevMobileGridDigitsHidden = mobileGridDigits ? !!mobileGridDigits.hidden : null;
+    guidedResolutionState.prevGridPlayMenuHidden = gridPlayMenu ? !!gridPlayMenu.hidden : null;
+
+    if (mobileGridDigits) {
+        mobileGridDigits.hidden = true;
+    }
+    if (gridPlayMenu) {
+        gridPlayMenu.hidden = true;
+    }
+
+    overlay.hidden = false;
+    closeGuidedResolutionVideo();
+    clearHighlights();
+    renderGuidedResolutionOverlay();
+    enforceGuidedResolutionHiddenControls();
+}
+
+function requestGuidedResolution(mode) {
+    if (typeof window.incrementDemandCounter === 'function') {
+        window.incrementDemandCounter('values');
+    }
+
+    const step = findNextStep();
+    openGuidedResolutionOverlay(mode, step);
+}
+
+function initGuidedResolutionOverlay() {
+    const els = getGuidedResolutionElements();
+    if (!els.overlay) return;
+
+    els.closeBtn?.addEventListener('click', closeGuidedResolutionOverlay);
+    els.nextBtn?.addEventListener('click', () => {
+        if (guidedResolutionState.phase >= 2) {
+            applyGuidedResolutionStep();
+            return;
+        }
+        setGuidedResolutionPhase(guidedResolutionState.phase + 1);
+    });
+    els.videoBtn?.addEventListener('click', toggleGuidedResolutionVideo);
+    els.videoCloseBtn?.addEventListener('click', closeGuidedResolutionVideo);
+
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+
+    document.addEventListener('keydown', (evt) => {
+        if (evt.key === 'Escape' && guidedResolutionState.open) {
+            closeGuidedResolutionOverlay();
+        }
+    });
+}
+
 function displayExplanation(step) {
     if (!step) return;
 
@@ -731,26 +999,12 @@ function displayHint(step) {
 }
 
 document.getElementById('nextStepBtn')?.addEventListener('click', () => {
-    if (typeof window.incrementDemandCounter === 'function') {
-        window.incrementDemandCounter();
-    }
-    cleanCandidates();
-    clearHighlights();
-    const step = findNextStep();
-    // console.log('Next step found:', step);
-    displayExplanation(step);
-    applyStep(step);
+    requestGuidedResolution('solution');
 });
 
 // Bouton Indice: suggère la technique sans appliquer l'étape
 document.getElementById('hintBtn')?.addEventListener('click', () => {
-    if (typeof window.incrementDemandCounter === 'function') {
-        window.incrementDemandCounter();
-    }
-    // On ne touche pas aux surlignages pour garder le contexte courant
-    const step = findNextStep();
-    displayHint(step);
-    // Pas d'application de l'étape ici
+    requestGuidedResolution('hint');
 });
 
 document.getElementById('clearHighlightsBtn')?.addEventListener('click', clearHighlights);
@@ -759,6 +1013,7 @@ document.getElementById('clearHighlightsBtn')?.addEventListener('click', clearHi
 window.addEventListener('DOMContentLoaded', () => {
     populateTechniqueSelect();
     initExplanationMenu();
+    initGuidedResolutionOverlay();
     if (typeof window.invalidateDifficultyEstimate === 'function') {
         window.invalidateDifficultyEstimate();
     }

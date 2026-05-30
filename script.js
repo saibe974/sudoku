@@ -79,6 +79,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let timerAwaitingFirstGridAction = false;
     let puzzleSolvedCelebrated = false;
     let demandCount = 0;
+    let demandCountCandidates = 0;
+    let demandCountValues = 0;
     let difficultyCacheKey = '';
     let difficultyCacheValue = { label: '-', score: 0 };
     let difficultyModalEl = null;
@@ -127,11 +129,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderDemandCounter() {
         if (!demandCounterEl) return;
-        demandCounterEl.textContent = 'Demandes: ' + demandCount;
+        demandCounterEl.innerHTML = '<i data-lucide="grid-3x3"></i> ' + demandCountCandidates
+            + ' <i data-lucide="lightbulb"></i> ' + demandCountValues;
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
     }
 
     function resetDemandCounter() {
         demandCount = 0;
+        demandCountCandidates = 0;
+        demandCountValues = 0;
         renderDemandCounter();
         difficultyCacheKey = '';
         difficultyCacheValue = { label: '-', score: 0 };
@@ -768,8 +776,14 @@ document.addEventListener('DOMContentLoaded', function () {
         startTimer();
     }
 
-    window.incrementDemandCounter = function () {
+    window.incrementDemandCounter = function (requestType = 'values') {
+        const normalizedType = requestType === 'candidates' ? 'candidates' : 'values';
         demandCount += 1;
+        if (normalizedType === 'candidates') {
+            demandCountCandidates += 1;
+        } else {
+            demandCountValues += 1;
+        }
         renderDemandCounter();
     };
 
@@ -2233,6 +2247,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (gridMenuCandidatesBtn) {
         gridMenuCandidatesBtn.addEventListener('click', () => {
             if (toggleCandidatesBtn) toggleCandidatesBtn.click();
+
         });
     }
 
@@ -2253,6 +2268,9 @@ document.addEventListener('DOMContentLoaded', function () {
             if (sanitizeCandidatesBtn) {
                 sanitizeCandidatesBtn.click();
             } else if (typeof window.sanitizeCandidates === 'function') {
+                if (typeof window.incrementDemandCounter === 'function') {
+                    window.incrementDemandCounter('candidates');
+                }
                 window.sanitizeCandidates();
             }
         });
