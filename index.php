@@ -11,6 +11,7 @@ define('MODE', 'debug'); // 'debug' or 'production'
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Apprendre le Sudoku</title>
   <link rel="stylesheet" href="style.css?<?= MODE == 'debug' ? date('dmyhs') : $version; ?>" />
+  <link rel="stylesheet" href="responsive.css?<?= MODE == 'debug' ? date('dmyhs') : $version; ?>" />
   <link rel="stylesheet" href="candidates.css?<?= MODE == 'debug' ? date('dmyhs') : $version; ?>" />
   <script src="https://unpkg.com/lucide@latest"></script>
   <script async src="https://docs.opencv.org/4.10.0/opencv.js"></script>
