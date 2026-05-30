@@ -1,5 +1,36 @@
 /* Styles pour l'affichage des candidats dans les cellules */
 
+:root {
+    --cand-digit-size: 7px;
+    --cand-button-size: 32px;
+    --cand-button-font-size: 12px;
+    --explanation-padding: 10px;
+    --technique-name-size: 14px;
+    --technique-desc-size: 12px;
+}
+
+@media (min-width: 481px) {
+    :root {
+        --cand-digit-size: 8px;
+        --cand-button-size: 36px;
+        --cand-button-font-size: 14px;
+        --explanation-padding: 12px;
+        --technique-name-size: 15px;
+        --technique-desc-size: 13px;
+    }
+}
+
+@media (min-width: 769px) {
+    :root {
+        --cand-digit-size: 10px;
+        --cand-button-size: 40px;
+        --cand-button-font-size: 15px;
+        --explanation-padding: 14px;
+        --technique-name-size: 16px;
+        --technique-desc-size: 14px;
+    }
+}
+
 .sudoku-grid td {
     cursor: pointer;
 }
@@ -26,7 +57,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
+    font-size: var(--cand-digit-size);
     font-weight: 600;
     color: var(--muted);
     opacity: 0.7;
@@ -77,8 +108,9 @@ body.theme-light .cand-digit.cand-kill {
 
 /* Popover candidats */
 .cand-grid button {
-    width: 40px;
-    height: 40px;
+    width: var(--cand-button-size);
+    height: var(--cand-button-size);
+    font-size: var(--cand-button-font-size);
     font-weight: 600;
 }
 
@@ -100,7 +132,7 @@ body.theme-light .cand-digit.cand-kill {
     background: linear-gradient(180deg, rgba(17, 24, 39, 0.95) 0%, rgba(11, 18, 32, 0.95) 100%);
     border: 1px solid var(--grid-2);
     border-radius: 12px;
-    padding: 14px;
+    padding: var(--explanation-padding);
     margin-bottom: 12px;
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
 }
@@ -112,7 +144,7 @@ body.theme-light .explanation {
 }
 
 .technique-name {
-    font-size: 16px;
+    font-size: var(--technique-name-size);
     margin-bottom: 8px;
     font-weight: 600;
 }
@@ -136,7 +168,7 @@ body.theme-light .explanation {
 .technique-desc {
     color: var(--text);
     opacity: 0.9;
-    font-size: 14px;
+    font-size: var(--technique-desc-size);
     line-height: 1.5;
 }
 
@@ -189,39 +221,4 @@ details summary:hover {
     }
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .cand-digit {
-        font-size: 8px;
-    }
-
-    .cand-grid button {
-        width: 36px;
-        height: 36px;
-        font-size: 14px;
-    }
-}
-
-@media (max-width: 480px) {
-    .cand-digit {
-        font-size: 7px;
-    }
-
-    .cand-grid button {
-        width: 32px;
-        height: 32px;
-        font-size: 12px;
-    }
-
-    .explanation {
-        padding: 10px;
-    }
-
-    .technique-name {
-        font-size: 14px;
-    }
-
-    .technique-desc {
-        font-size: 12px;
-    }
-}
+/* Mobile-first: tailles pilotées par variables via min-width */

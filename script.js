@@ -42,6 +42,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const gridTimerBtnEl = document.getElementById('gridTimerBtn');
     const gridTimerEl = document.getElementById('gridTimerValue');
     const gridTimerToggleIconEl = document.getElementById('gridTimerToggleIcon');
+    const gridHistoryResetBtnEl = document.getElementById('gridHistoryResetBtn');
+    const gridHistoryPrevBtnEl = document.getElementById('gridHistoryPrevBtn');
+    const gridHistoryNextBtnEl = document.getElementById('gridHistoryNextBtn');
     const demandCounterEl = document.getElementById('demandCounter');
     const gridDifficultyEl = document.getElementById('gridDifficulty');
     const gridMenuValuesBtn = document.getElementById('gridMenuValuesBtn');
@@ -87,6 +90,11 @@ document.addEventListener('DOMContentLoaded', function () {
     let difficultyAnalysisState = 'idle';
     let difficultyPendingModalOpen = false;
     let difficultyPrereqActionDone = false;
+    let moveHistoryBase = null;
+    let moveHistoryBaseSnapshot = null;
+    let moveHistoryMoves = [];
+    let moveHistoryCursor = -1;
+    let pendingInputBeforeState = null;
 
     const STATUS_AUTO_HIDE_MS = 4000;
     const MOBILE_BREAKPOINT = 768;
@@ -477,6 +485,413 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
+    function cloneHistoryState(state) {
+        return {
+            values: Array.from({ length: SIZE }, (_, r) =>
+                Array.from({ length: SIZE }, (_, c) => Number((state && state.values && state.values[r] && state.values[r][c]) || 0))
+            ),
+            givens: Array.from({ length: SIZE }, (_, r) =>
+                Array.from({ length: SIZE }, (_, c) => !!(state && state.givens && state.givens[r] && state.givens[r][c]))
+            )
+        };
+    }
+
+    function buildEmptyCandidatesGrid() {
+        return Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => []));
+    }
+
+    function cloneCandidatesGrid(candidates) {
+        if (!Array.isArray(candidates) || candidates.length !== SIZE) {
+            return buildEmptyCandidatesGrid();
+        }
+
+        const next = buildEmptyCandidatesGrid();
+        for (let r = 0; r < SIZE; r++) {
+            if (!Array.isArray(candidates[r]) || candidates[r].length !== SIZE) continue;
+            for (let c = 0; c < SIZE; c++) {
+                const raw = candidates[r][c];
+                if (!Array.isArray(raw)) {
+                    next[r][c] = [];
+                    continue;
+                }
+                next[r][c] = raw
+                    .map((v) => Number(v))
+                    .filter((v) => Number.isInteger(v) && v >= 1 && v <= 9);
+            }
+        }
+        return next;
+    }
+
+    function cloneHistorySnapshotState(state) {
+        const core = cloneHistoryState(state);
+        return {
+            values: core.values,
+            givens: core.givens,
+            candidates: cloneCandidatesGrid(state && state.candidates)
+        };
+    }
+
+    function encodeGridValues(values) {
+        const chars = [];
+        for (let r = 0; r < SIZE; r++) {
+            for (let c = 0; c < SIZE; c++) {
+                const v = Number((values[r] && values[r][c]) || 0);
+                chars.push(String(v >= 1 && v <= 9 ? v : 0));
+            }
+        }
+        return chars.join('');
+    }
+
+    function encodeGridGivens(givens) {
+        const chars = [];
+        for (let r = 0; r < SIZE; r++) {
+            for (let c = 0; c < SIZE; c++) {
+                chars.push((givens[r] && givens[r][c]) ? '1' : '0');
+            }
+        }
+        return chars.join('');
+    }
+
+    function decodeGridValues(encoded) {
+        if (typeof encoded !== 'string' || encoded.length !== SIZE * SIZE) {
+            return Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+        }
+        return Array.from({ length: SIZE }, (_, r) =>
+            Array.from({ length: SIZE }, (_, c) => {
+                const idx = r * SIZE + c;
+                const v = Number(encoded.charAt(idx));
+                return (v >= 1 && v <= 9) ? v : 0;
+            })
+        );
+    }
+
+    function decodeGridGivens(encoded) {
+        if (typeof encoded !== 'string' || encoded.length !== SIZE * SIZE) {
+            return Array.from({ length: SIZE }, () => Array(SIZE).fill(false));
+        }
+        return Array.from({ length: SIZE }, (_, r) =>
+            Array.from({ length: SIZE }, (_, c) => {
+                const idx = r * SIZE + c;
+                return encoded.charAt(idx) === '1';
+            })
+        );
+    }
+
+    function renderMoveHistoryButtons() {
+        if (gridHistoryPrevBtnEl) gridHistoryPrevBtnEl.disabled = false;
+        if (gridHistoryNextBtnEl) gridHistoryNextBtnEl.disabled = false;
+        if (gridHistoryResetBtnEl) gridHistoryResetBtnEl.disabled = false;
+    }
+
+    function resetMoveHistoryFromState(state) {
+        const source = state || getState();
+        const safeState = cloneHistoryState(source);
+        moveHistoryBase = {
+            v: encodeGridValues(safeState.values),
+            g: encodeGridGivens(safeState.givens)
+        };
+        moveHistoryBaseSnapshot = cloneHistorySnapshotState(source);
+        moveHistoryMoves = [];
+        moveHistoryCursor = -1;
+        renderMoveHistoryButtons();
+    }
+
+    function buildMoveChanges(prevState, nextState) {
+        const prev = cloneHistoryState(prevState);
+        const next = cloneHistoryState(nextState);
+        const changes = [];
+
+        for (let r = 0; r < SIZE; r++) {
+            for (let c = 0; c < SIZE; c++) {
+                const fromV = Number(prev.values[r][c] || 0);
+                const toV = Number(next.values[r][c] || 0);
+                const fromG = prev.givens[r][c] ? 1 : 0;
+                const toG = next.givens[r][c] ? 1 : 0;
+                if (fromV === toV && fromG === toG) continue;
+                changes.push([r * SIZE + c, fromV, fromG, toV, toG]);
+            }
+        }
+
+        return changes;
+    }
+
+    function pushMoveFromStates(prevState, nextState) {
+        if (!moveHistoryBase) {
+            resetMoveHistoryFromState(prevState || getState());
+        }
+
+        const changes = buildMoveChanges(prevState, nextState);
+        if (!changes.length) return false;
+
+        if (moveHistoryCursor < moveHistoryMoves.length - 1) {
+            moveHistoryMoves = moveHistoryMoves.slice(0, moveHistoryCursor + 1);
+        }
+
+        moveHistoryMoves.push({ c: changes });
+        moveHistoryCursor = moveHistoryMoves.length - 1;
+
+        if (moveHistoryMoves.length > 5000) {
+            moveHistoryMoves.shift();
+            moveHistoryCursor = moveHistoryMoves.length - 1;
+        }
+
+        renderMoveHistoryButtons();
+        return true;
+    }
+
+    function applyMoveChanges(changes, useToValues) {
+        if (!Array.isArray(changes) || !changes.length) return;
+
+        const current = getState();
+        const nextValues = current.values.map((row) => row.slice());
+        const nextGivens = current.givens.map((row) => row.slice());
+
+        for (let i = 0; i < changes.length; i++) {
+            const change = changes[i];
+            if (!Array.isArray(change) || change.length !== 5) continue;
+            const idx = Number(change[0]);
+            if (!Number.isInteger(idx) || idx < 0 || idx >= SIZE * SIZE) continue;
+
+            const r = Math.floor(idx / SIZE);
+            const c = idx % SIZE;
+            const value = Number(useToValues ? change[3] : change[1]);
+            const given = Number(useToValues ? change[4] : change[2]) === 1;
+
+            nextValues[r][c] = (value >= 1 && value <= 9) ? value : 0;
+            nextGivens[r][c] = given;
+        }
+
+        setState({
+            values: nextValues,
+            givens: nextGivens,
+            candidates: current.candidates
+        });
+        refreshGridPlayMenuVisibility();
+    }
+
+    function undoMoveHistory() {
+        if (moveHistoryCursor < 0) {
+            setStatus('Aucun coup precedent.', 'warn');
+            renderMoveHistoryButtons();
+            return;
+        }
+
+        const move = moveHistoryMoves[moveHistoryCursor];
+        applyMoveChanges(move && move.c, false);
+        moveHistoryCursor -= 1;
+        renderMoveHistoryButtons();
+        setStatus('Coup precedent restaure.', 'ok');
+    }
+
+    function redoMoveHistory() {
+        if (moveHistoryCursor + 1 >= moveHistoryMoves.length) {
+            setStatus('Aucun coup suivant.', 'warn');
+            renderMoveHistoryButtons();
+            return;
+        }
+
+        const move = moveHistoryMoves[moveHistoryCursor + 1];
+        applyMoveChanges(move && move.c, true);
+        moveHistoryCursor += 1;
+        renderMoveHistoryButtons();
+        setStatus('Coup suivant applique.', 'ok');
+    }
+
+    function resetToHistoryBase() {
+        if (!moveHistoryBase) {
+            setStatus('Historique indisponible.', 'warn');
+            return;
+        }
+
+        const fallbackState = {
+            values: decodeGridValues(moveHistoryBase.v),
+            givens: decodeGridGivens(moveHistoryBase.g),
+            candidates: buildEmptyCandidatesGrid()
+        };
+        const baseSnapshot = moveHistoryBaseSnapshot
+            ? cloneHistorySnapshotState(moveHistoryBaseSnapshot)
+            : fallbackState;
+
+        // Reset history = revenir a la grille de depart: seules les donnees (givens) restent remplies.
+        const givensOnlyValues = Array.from({ length: SIZE }, (_, r) =>
+            Array.from({ length: SIZE }, (_, c) => {
+                if (!baseSnapshot.givens[r][c]) return 0;
+                const v = Number(baseSnapshot.values[r][c] || 0);
+                return (v >= 1 && v <= 9) ? v : 0;
+            })
+        );
+
+        setState({
+            values: givensOnlyValues,
+            givens: baseSnapshot.givens,
+            candidates: buildEmptyCandidatesGrid()
+        });
+        moveHistoryCursor = -1;
+        renderMoveHistoryButtons();
+        refreshGridPlayMenuVisibility();
+        setStatus('Retour a la grille de base (givens uniquement).', 'ok');
+    }
+
+    function buildMoveHistoryExportData() {
+        if (!moveHistoryBase) return null;
+        if (!Array.isArray(moveHistoryMoves) || moveHistoryMoves.length === 0) return null;
+
+        return {
+            v: 1,
+            base: {
+                v: moveHistoryBase.v,
+                g: moveHistoryBase.g
+            },
+            moves: moveHistoryMoves.map((move) => ({
+                c: Array.isArray(move && move.c) ? move.c : []
+            })),
+            cursor: Number(moveHistoryCursor)
+        };
+    }
+
+    function loadMoveHistoryFromImport(obj) {
+        const history = obj && obj.history;
+        if (!history || typeof history !== 'object') return false;
+
+        const parseCompactHistory = () => {
+            const base = history.base;
+            if (!base || typeof base !== 'object') return false;
+            if (typeof base.v !== 'string' || base.v.length !== SIZE * SIZE) return false;
+            if (typeof base.g !== 'string' || base.g.length !== SIZE * SIZE) return false;
+            if (!Array.isArray(history.moves)) return false;
+
+            const parsedMoves = [];
+            for (let i = 0; i < history.moves.length; i++) {
+                const move = history.moves[i];
+                const changes = move && Array.isArray(move.c) ? move.c : null;
+                if (!changes) return false;
+
+                const parsedChanges = [];
+                for (let j = 0; j < changes.length; j++) {
+                    const c = changes[j];
+                    if (!Array.isArray(c) || c.length !== 5) return false;
+                    const idx = Number(c[0]);
+                    const fromV = Number(c[1]);
+                    const fromG = Number(c[2]);
+                    const toV = Number(c[3]);
+                    const toG = Number(c[4]);
+
+                    if (!Number.isInteger(idx) || idx < 0 || idx >= SIZE * SIZE) return false;
+                    if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9].includes(fromV)) return false;
+                    if (![0, 1].includes(fromG)) return false;
+                    if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9].includes(toV)) return false;
+                    if (![0, 1].includes(toG)) return false;
+
+                    parsedChanges.push([idx, fromV, fromG, toV, toG]);
+                }
+
+                parsedMoves.push({ c: parsedChanges });
+            }
+
+            moveHistoryBase = { v: base.v, g: base.g };
+            moveHistoryBaseSnapshot = {
+                values: decodeGridValues(base.v),
+                givens: decodeGridGivens(base.g),
+                candidates: cloneCandidatesGrid(base.candidates)
+            };
+            moveHistoryMoves = parsedMoves;
+            moveHistoryCursor = Math.max(-1, Math.min(Number(history.cursor), moveHistoryMoves.length - 1));
+            renderMoveHistoryButtons();
+            return true;
+        };
+
+        const parseSnapshotState = (rawState) => {
+            if (!rawState || typeof rawState !== 'object') return null;
+            const values = rawState.values;
+            const givens = rawState.givens;
+            if (!Array.isArray(values) || values.length !== SIZE) return null;
+            if (!Array.isArray(givens) || givens.length !== SIZE) return null;
+
+            const safeState = {
+                values: Array.from({ length: SIZE }, () => Array(SIZE).fill(0)),
+                givens: Array.from({ length: SIZE }, () => Array(SIZE).fill(false)),
+                candidates: cloneCandidatesGrid(rawState.candidates)
+            };
+
+            for (let r = 0; r < SIZE; r++) {
+                if (!Array.isArray(values[r]) || values[r].length !== SIZE) return null;
+                if (!Array.isArray(givens[r]) || givens[r].length !== SIZE) return null;
+                for (let c = 0; c < SIZE; c++) {
+                    const v = Number(values[r][c]);
+                    const g = givens[r][c];
+                    if (!Number.isFinite(v) || v < 0 || v > 9) return null;
+                    if (typeof g !== 'boolean') return null;
+                    safeState.values[r][c] = (v >= 1 && v <= 9) ? v : 0;
+                    safeState.givens[r][c] = g;
+                }
+            }
+
+            return safeState;
+        };
+
+        const parseSnapshotHistory = () => {
+            const entries = Array.isArray(history.entries) ? history.entries : null;
+            if (!entries || entries.length === 0) return false;
+
+            const snapshots = [];
+            for (let i = 0; i < entries.length; i++) {
+                const item = entries[i];
+                const rawState = item && item.state ? item.state : item;
+                const state = parseSnapshotState(rawState);
+                if (!state) return false;
+                snapshots.push(state);
+            }
+
+            const baseState = parseSnapshotState(history.base)
+                || snapshots[0]
+                || cloneHistoryState(getState());
+
+            const compactMoves = [];
+            let prev = baseState;
+            for (let i = 0; i < snapshots.length; i++) {
+                const next = snapshots[i];
+                compactMoves.push({ c: buildMoveChanges(prev, next) });
+                prev = next;
+            }
+
+            // Si le premier snapshot est la base, la premiere transition est vide: on l'ignore.
+            if (compactMoves.length > 0 && compactMoves[0].c.length === 0) {
+                compactMoves.shift();
+            }
+
+            const pointerRaw = Number(history.pointer);
+            const pointer = Number.isFinite(pointerRaw)
+                ? Math.max(0, Math.min(Math.floor(pointerRaw), snapshots.length - 1))
+                : (snapshots.length - 1);
+
+            moveHistoryBase = {
+                v: encodeGridValues(baseState.values),
+                g: encodeGridGivens(baseState.givens)
+            };
+            moveHistoryBaseSnapshot = cloneHistorySnapshotState(baseState);
+            moveHistoryMoves = compactMoves;
+            moveHistoryCursor = Math.max(-1, Math.min(pointer - 1, moveHistoryMoves.length - 1));
+            renderMoveHistoryButtons();
+            return true;
+        };
+
+        return parseCompactHistory() || parseSnapshotHistory();
+    }
+
+    function captureStateBeforeMove() {
+        return cloneHistoryState(getState());
+    }
+
+    function recordMoveAfterMutation(beforeState) {
+        if (!beforeState) return false;
+        const afterState = cloneHistoryState(getState());
+        const recorded = pushMoveFromStates(beforeState, afterState);
+        if (recorded) {
+            notifyGridActionForTimer();
+        }
+        return recorded;
+    }
+
     function buildExportState() {
         const state = getState();
         const exportState = {
@@ -488,6 +903,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const difficultyData = buildDifficultyExportData();
         if (difficultyData) {
             exportState.difficulty = difficultyData;
+        }
+
+        const historyData = buildMoveHistoryExportData();
+        if (historyData) {
+            exportState.history = historyData;
         }
 
         return exportState;
@@ -862,7 +1282,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function resetImportedGridView(options = {}) {
-        const { autoAnalyzeDifficulty = false } = options;
+        const { autoAnalyzeDifficulty = false, preserveMoveHistory = false } = options;
 
         hideOverlayNumpad();
         setSelectedGridCell(null);
@@ -874,6 +1294,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (typeof window.resetExplanationPanel === 'function') {
             window.resetExplanationPanel();
+        }
+
+        if (!preserveMoveHistory) {
+            resetMoveHistoryFromState(getState());
+        } else {
+            renderMoveHistoryButtons();
         }
 
         // Repartir a zero apres un import et armer un demarrage au premier changement utilisateur.
@@ -902,12 +1328,13 @@ document.addEventListener('DOMContentLoaded', function () {
         if (selectedGridCellEl.classList.contains('given')) return;
         const input = selectedGridCellEl.querySelector('.cell-input');
         if (!input) return;
+        const beforeState = captureStateBeforeMove();
 
         if (digit === 'clear') {
             input.value = '';
             updateConflicts();
             callCandidatesRender();
-            notifyGridActionForTimer();
+            recordMoveAfterMutation(beforeState);
             refreshGridPlayMenuVisibility();
             return;
         }
@@ -919,7 +1346,7 @@ document.addEventListener('DOMContentLoaded', function () {
         input.value = (current === safeDigit) ? '' : String(safeDigit);
         updateConflicts();
         callCandidatesRender();
-        notifyGridActionForTimer();
+        recordMoveAfterMutation(beforeState);
         refreshGridPlayMenuVisibility();
     }
 
@@ -964,9 +1391,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 input.dataset.c = c;
 
                 input.addEventListener('beforeinput', (e) => {
+                    pendingInputBeforeState = null;
                     if (e.inputType === 'insertText' && !/[1-9]/.test(e.data || '')) {
                         e.preventDefault();
+                        return;
                     }
+                    pendingInputBeforeState = captureStateBeforeMove();
                 });
 
                 input.addEventListener('focus', () => {
@@ -986,11 +1416,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     const col = Number(input.dataset.c);
 
                     if (e.key === 'Backspace' || e.key === 'Delete') {
+                        const beforeState = captureStateBeforeMove();
                         input.value = '';
                         e.preventDefault();
                         updateConflicts();
                         callCandidatesRender();
-                        notifyGridActionForTimer();
+                        recordMoveAfterMutation(beforeState);
                         return;
                     }
 
@@ -1018,19 +1449,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
 
                 input.addEventListener('input', () => {
+                    const beforeState = pendingInputBeforeState || captureStateBeforeMove();
                     input.value = input.value.replace(/[^1-9]/g, '').slice(0, 1);
+                    pendingInputBeforeState = null;
                     updateConflicts();
                     callCandidatesRender();
-                    notifyGridActionForTimer();
+                    recordMoveAfterMutation(beforeState);
                 });
 
                 td.appendChild(input);
                 td.addEventListener('click', () => {
                     if (!givenModeEl || !givenModeEl.checked) return;
+                    const beforeState = captureStateBeforeMove();
                     td.classList.toggle('given');
                     updateConflicts();
                     callCandidatesRender();
                     invalidateDifficultyState({ allowDisplayAfterAction: true });
+                    recordMoveAfterMutation(beforeState);
                 });
 
                 td.addEventListener('pointerdown', () => {
@@ -1859,7 +2294,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     const obj = JSON.parse(reader.result);
                     validateState(obj);
                     setState(obj);
-                    resetImportedGridView({ autoAnalyzeDifficulty: true });
+                    const importedHistoryLoaded = loadMoveHistoryFromImport(obj);
+                    if (!importedHistoryLoaded) {
+                        resetMoveHistoryFromState(getState());
+                    }
+                    resetImportedGridView({ autoAnalyzeDifficulty: true, preserveMoveHistory: importedHistoryLoaded });
                     setStatus('Import depuis fichier reussi.', 'ok');
                 } catch (err) {
                     setStatus('Erreur de parsing : ' + err.message, 'err');
@@ -2200,6 +2639,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 givens: Array.from({ length: SIZE }, () => Array(SIZE).fill(false))
             };
             setState(example);
+            resetMoveHistoryFromState(getState());
             invalidateDifficultyState({ allowDisplayAfterAction: true });
             setStatus('Exemple charge.', 'warn');
         });
@@ -2208,6 +2648,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (clearValuesBtn) {
         clearValuesBtn.addEventListener('click', () => {
             if (!gridEl || !gridEl.rows) return;
+            const beforeState = captureStateBeforeMove();
             for (let r = 0; r < SIZE; r++) {
                 for (let c = 0; c < SIZE; c++) {
                     const td = gridEl.rows[r].cells[c];
@@ -2220,6 +2661,7 @@ document.addEventListener('DOMContentLoaded', function () {
             updateConflicts();
             callCandidatesRender();
             refreshGridPlayMenuVisibility();
+            recordMoveAfterMutation(beforeState);
             setStatus('Valeurs effacees (hors donnees).', 'ok');
         });
     }
@@ -2239,6 +2681,7 @@ document.addEventListener('DOMContentLoaded', function () {
             updateConflicts();
             callCandidatesRender();
             setGridPlayMenuVisible(false);
+            resetMoveHistoryFromState(getState());
             invalidateDifficultyState({ allowDisplayAfterAction: false });
             setStatus('Grille reinitialisee.', 'ok');
         });
@@ -2301,6 +2744,24 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    if (gridHistoryResetBtnEl) {
+        gridHistoryResetBtnEl.addEventListener('click', () => {
+            resetToHistoryBase();
+        });
+    }
+
+    if (gridHistoryPrevBtnEl) {
+        gridHistoryPrevBtnEl.addEventListener('click', () => {
+            undoMoveHistory();
+        });
+    }
+
+    if (gridHistoryNextBtnEl) {
+        gridHistoryNextBtnEl.addEventListener('click', () => {
+            redoMoveHistory();
+        });
+    }
+
     if (gridDifficultyEl) {
         gridDifficultyEl.style.cursor = 'pointer';
         gridDifficultyEl.addEventListener('click', () => {
@@ -2345,6 +2806,7 @@ document.addEventListener('DOMContentLoaded', function () {
     buildGrid();
     resetTimer();
     resetDemandCounter();
+    resetMoveHistoryFromState(getState());
     renderDifficulty(getState());
     setGridPlayMenuVisible(false);
     setStatus('Pret.');

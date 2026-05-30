@@ -79,6 +79,17 @@ define('MODE', 'debug'); // 'debug' or 'production'
 
       <div class="grid-wrapper">
         <div class="grid-topbar" aria-label="Informations de partie">
+          <div class="grid-history-controls" aria-label="Historique des coups">
+            <button class="grid-history-btn" id="gridHistoryResetBtn" type="button" title="Revenir au debut" aria-label="Revenir au debut">
+              <i data-lucide="rotate-ccw"></i>
+            </button>
+            <button class="grid-history-btn" id="gridHistoryPrevBtn" type="button" title="Coup precedent" aria-label="Coup precedent">
+              <i data-lucide="chevron-left"></i>
+            </button>
+            <button class="grid-history-btn" id="gridHistoryNextBtn" type="button" title="Coup suivant" aria-label="Coup suivant">
+              <i data-lucide="chevron-right"></i>
+            </button>
+          </div>
           <button class="grid-timer" id="gridTimerBtn" type="button" aria-pressed="false" title="Mettre en pause le timer" aria-label="Mettre en pause le timer">
             <span id="gridTimerToggleIcon"><i data-lucide="pause"></i></span>
             <span id="gridTimerValue" aria-live="polite">00:00</span>
