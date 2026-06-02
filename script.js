@@ -2212,18 +2212,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!photoCornersOverlayEl || !photoPreviewImgEl) return;
         photoCornersOverlayEl.classList.toggle('fallback-corners', usingFallbackCorners);
         if (photoFeaturePointsEl) {
-            if (Array.isArray(pendingPhotoFeatureRatios) && pendingPhotoFeatureRatios.length) {
-                photoFeaturePointsEl.innerHTML = pendingPhotoFeatureRatios.map((point) => {
-                    const x = ((Number(point.x) || 0) * 100).toFixed(3);
-                    const y = ((Number(point.y) || 0) * 100).toFixed(3);
-                    const type = point.type || 'corner';
-                    const arms = Array.isArray(point.arms) && point.arms.length ? ' [' + point.arms.join(', ') + ']' : '';
-                    return '<span class="photo-feature-point ' + type + '" style="left:' + x + '%;top:' + y + '%;" title="'
-                        + type + arms + '"></span>';
-                }).join('');
-            } else {
-                photoFeaturePointsEl.innerHTML = '';
-            }
+            photoFeaturePointsEl.innerHTML = '';
         }
         if (!pendingPhotoCornerRatios || pendingPhotoCornerRatios.length !== 4) {
             photoCornersOverlayEl.hidden = true;
@@ -2270,18 +2259,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function setPreviewFeaturePoints(points, imageWidth, imageHeight) {
-        if (!Array.isArray(points) || !imageWidth || !imageHeight) {
-            pendingPhotoFeatureRatios = [];
-            renderPreviewCorners();
-            return;
-        }
-
-        pendingPhotoFeatureRatios = points.map((point) => ({
-            x: clamp01((Number(point.x) || 0) / imageWidth),
-            y: clamp01((Number(point.y) || 0) / imageHeight),
-            type: point.type || 'corner',
-            arms: Array.isArray(point.arms) ? point.arms.slice() : []
-        }));
+        pendingPhotoFeatureRatios = [];
         renderPreviewCorners();
     }
 
@@ -2388,18 +2366,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(async (img) => {
                     await getPictureApi().ensureCvReady();
                     const detected = getPictureApi().detectSudokuCorners(img);
-                    setPreviewFeaturePoints(detected.featurePoints || [], detected.imageWidth, detected.imageHeight);
+                    setPreviewFeaturePoints([], detected.imageWidth, detected.imageHeight);
                     if (detected.points) {
                         usingFallbackCorners = false;
                         setPreviewCornersFromPoints(detected.points, detected.imageWidth, detected.imageHeight);
                         hasManualCornerEdits = false;
-                        setStatus('Photo chargee. Les 4 coins detectes sont affiches avec ' + (detected.featurePoints || []).length + ' points de structure.', 'ok');
+                        setStatus('Photo chargee. Les 4 coins detectes sont affiches.', 'ok');
                     } else {
                         usingFallbackCorners = true;
                         const fallback = getImageBoundaryCorners(detected.imageWidth, detected.imageHeight);
                         setPreviewCornersFromPoints(fallback, detected.imageWidth, detected.imageHeight);
                         hasManualCornerEdits = true;
-                        setStatus('Coins non detectes: coins de secours affiches en rouge. ' + (detected.featurePoints || []).length + ' points de structure sont affiches pour guider le cadrage.', 'warn');
+                        setStatus('Coins non detectes: coins de secours affiches en rouge pour guider le cadrage.', 'warn');
                     }
                 })
                 .catch(() => {

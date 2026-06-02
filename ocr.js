@@ -67,6 +67,63 @@
         return bw;
     }
 
+    function cleanBinaryForGridRecognition(binaryMat, options = {}) {
+        if (!binaryMat || !binaryMat.cols || !binaryMat.rows) return binaryMat ? binaryMat.clone() : null;
+
+        const safeOptions = options || {};
+        const minAreaRatio = Math.max(0, Number(safeOptions.minAreaRatio == null ? 0.00008 : safeOptions.minAreaRatio));
+        const minStrokeLen = Math.max(2, Number(safeOptions.minStrokeLen == null ? 10 : safeOptions.minStrokeLen));
+        const closeKernelSize = Math.max(1, Number(safeOptions.closeKernelSize == null ? 2 : safeOptions.closeKernelSize));
+        const openKernelSize = Math.max(1, Number(safeOptions.openKernelSize == null ? 2 : safeOptions.openKernelSize));
+
+        const areaThreshold = Math.max(4, Math.floor(binaryMat.rows * binaryMat.cols * minAreaRatio));
+
+        const inv = new cv.Mat();
+        const filteredInv = new cv.Mat.zeros(binaryMat.rows, binaryMat.cols, cv.CV_8U);
+        const labels = new cv.Mat();
+        const stats = new cv.Mat();
+        const centroids = new cv.Mat();
+        const cleanedInv = new cv.Mat();
+        const cleaned = new cv.Mat();
+
+        cv.bitwise_not(binaryMat, inv);
+        const labelsCount = cv.connectedComponentsWithStats(inv, labels, stats, centroids, 8, cv.CV_32S);
+
+        const keepLabel = Array(labelsCount).fill(false);
+        for (let i = 1; i < labelsCount; i++) {
+            const area = stats.intPtr(i, cv.CC_STAT_AREA)[0];
+            const w = stats.intPtr(i, cv.CC_STAT_WIDTH)[0];
+            const h = stats.intPtr(i, cv.CC_STAT_HEIGHT)[0];
+            keepLabel[i] = area >= areaThreshold || w >= minStrokeLen || h >= minStrokeLen;
+        }
+
+        for (let y = 0; y < labels.rows; y++) {
+            for (let x = 0; x < labels.cols; x++) {
+                const label = labels.intPtr(y, x)[0];
+                if (label > 0 && keepLabel[label]) {
+                    filteredInv.ucharPtr(y, x)[0] = 255;
+                }
+            }
+        }
+
+        const closeKernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(closeKernelSize, closeKernelSize));
+        const openKernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(openKernelSize, openKernelSize));
+        cv.morphologyEx(filteredInv, cleanedInv, cv.MORPH_CLOSE, closeKernel);
+        cv.morphologyEx(cleanedInv, cleanedInv, cv.MORPH_OPEN, openKernel);
+        cv.bitwise_not(cleanedInv, cleaned);
+
+        closeKernel.delete();
+        openKernel.delete();
+        inv.delete();
+        filteredInv.delete();
+        labels.delete();
+        stats.delete();
+        centroids.delete();
+        cleanedInv.delete();
+
+        return cleaned;
+    }
+
     function extractPeakCenters(profile, thresholdRatio = 0.3, minRun = 2) {
         if (!Array.isArray(profile) || profile.length === 0) return [];
         const maxVal = profile.reduce((m, v) => Math.max(m, v), 0);
@@ -499,16 +556,20 @@
             throw new Error('Cellule hors limites.');
         }
 
-        const geometry = detectGridGeometryFromBinary(warpedGray, size, {
+        const binaryForRecognition = options.applyGridCleanup === false
+            ? warpedGray
+            : cleanBinaryForGridRecognition(warpedGray, options.gridCleanup);
+
+        const geometry = detectGridGeometryFromBinary(binaryForRecognition, size, {
             strictBorderRefine: !!options.strictBorderRefine
         });
         const eraseHalfThickness = options.lineEraseHalfThickness == null
             ? 5
             : Number(options.lineEraseHalfThickness);
         const cleanedForOcr = (geometry && eraseHalfThickness > 0)
-            ? removeDetectedGridLines(warpedGray, geometry, eraseHalfThickness)
+            ? removeDetectedGridLines(binaryForRecognition, geometry, eraseHalfThickness)
             : null;
-        const sourceMat = cleanedForOcr || warpedGray;
+        const sourceMat = cleanedForOcr || binaryForRecognition;
 
         const worker = await window.Tesseract.createWorker('eng');
         const psmSingleChar = (window.Tesseract.PSM && window.Tesseract.PSM.SINGLE_CHAR) ? window.Tesseract.PSM.SINGLE_CHAR : 10;
@@ -537,6 +598,7 @@
         } finally {
             await worker.terminate();
             if (cleanedForOcr) cleanedForOcr.delete();
+            if (binaryForRecognition !== warpedGray) binaryForRecognition.delete();
         }
     }
 
@@ -566,16 +628,20 @@
             tessedit_pageseg_mode: psmSingleChar
         });
 
-        const geometry = detectGridGeometryFromBinary(warpedGray, size, {
+        const binaryForRecognition = options.applyGridCleanup === false
+            ? warpedGray
+            : cleanBinaryForGridRecognition(warpedGray, options.gridCleanup);
+
+        const geometry = detectGridGeometryFromBinary(binaryForRecognition, size, {
             strictBorderRefine: !!options.strictBorderRefine
         });
         const eraseHalfThickness = options.lineEraseHalfThickness == null
             ? 5
             : Number(options.lineEraseHalfThickness);
         const cleanedForOcr = (geometry && eraseHalfThickness > 0)
-            ? removeDetectedGridLines(warpedGray, geometry, eraseHalfThickness)
+            ? removeDetectedGridLines(binaryForRecognition, geometry, eraseHalfThickness)
             : null;
-        const sourceMat = cleanedForOcr || warpedGray;
+        const sourceMat = cleanedForOcr || binaryForRecognition;
 
         try {
             for (let r = 0; r < size; r++) {
@@ -609,6 +675,7 @@
         } finally {
             await worker.terminate();
             if (cleanedForOcr) cleanedForOcr.delete();
+            if (binaryForRecognition !== warpedGray) binaryForRecognition.delete();
         }
 
         return { values, givens, candidates, analysis };
@@ -643,6 +710,7 @@
             const bwForOcr = preprocessWarpForOcrHighContrast(warpedGray, getTuning());
             let state;
             try {
+                setStatus('Nettoyage image OCR...', '');
                 state = await recognizeGrid(bwForOcr, {
                     size,
                     lineEraseHalfThickness: safe.lineEraseHalfThickness,
@@ -673,6 +741,7 @@
         ensureTesseractReady,
         parseRecognizedDigit,
         preprocessWarpForOcrHighContrast,
+        cleanBinaryForGridRecognition,
         detectGridGeometryFromBinary,
         removeDetectedGridLines,
         recognizeSingleCell,
