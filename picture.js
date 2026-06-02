@@ -977,7 +977,14 @@
     }
 
     function detectSudokuCorners(imageEl) {
-        const sourceCanvas = buildSourceCanvasFromImage(imageEl);
+        const sourceCanvas = document.createElement('canvas');
+        const srcW = imageEl.naturalWidth || imageEl.width;
+        const srcH = imageEl.naturalHeight || imageEl.height;
+        const scale = Math.min(1, 1100 / Math.max(1, srcW, srcH));
+        sourceCanvas.width = Math.max(1, Math.round(srcW * scale));
+        sourceCanvas.height = Math.max(1, Math.round(srcH * scale));
+        const sourceCtx = sourceCanvas.getContext('2d');
+        sourceCtx.drawImage(imageEl, 0, 0, sourceCanvas.width, sourceCanvas.height);
 
         const src = cv.imread(sourceCanvas);
         const gray = new cv.Mat();
@@ -985,6 +992,10 @@
         const thresh = new cv.Mat();
         const contours = new cv.MatVector();
         const hierarchy = new cv.Mat();
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+        const imageArea = Math.max(1, src.cols * src.rows);
+        let best = null;
 
         const clampPx = (n, max) => Math.max(0, Math.min(max, n));
         const sampleGray = (x, y) => {
@@ -997,8 +1008,9 @@
             const yi = clampPx(Math.round(y), thresh.rows - 1);
             return thresh.ucharPtr(yi, xi)[0];
         };
-        const shrinkQuadToBlack = (quad) => {
-            if (!quad || quad.length !== 4) return quad;
+
+        const shrinkQuadToInnerLines = (quad) => {
+            if (!Array.isArray(quad) || quad.length !== 4) return quad;
 
             const center = {
                 x: (quad[0].x + quad[1].x + quad[2].x + quad[3].x) / 4,
@@ -1006,7 +1018,7 @@
             };
 
             const maxTravelRatio = 0.35;
-            const blackGrayThreshold = 110;
+            const blackGrayThreshold = 115;
             const innerSafetyRatio = 0.18;
 
             const refined = quad.map((corner) => {
@@ -1066,43 +1078,117 @@
             return orderQuadPoints(refined);
         };
 
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-        cv.GaussianBlur(gray, blur, new cv.Size(7, 7), 0);
-        cv.adaptiveThreshold(blur, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
-        cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+        const contourToPoints = (mat) => {
+            const points = [];
+            for (let i = 0; i < mat.rows; i++) {
+                points.push({
+                    x: mat.intPtr(i, 0)[0],
+                    y: mat.intPtr(i, 0)[1]
+                });
+            }
+            return points;
+        };
 
-        let bestQuad = null;
-        let bestArea = 0;
+        const edgeDistance = (a, b) => Math.hypot((Number(a && a.x) || 0) - (Number(b && b.x) || 0), (Number(a && a.y) || 0) - (Number(b && b.y) || 0));
 
-        for (let i = 0; i < contours.size(); i++) {
-            const contour = contours.get(i);
-            const peri = cv.arcLength(contour, true);
-            const approx = new cv.Mat();
-            cv.approxPolyDP(contour, approx, 0.02 * peri, true);
+        const scoreQuadrilateral = (points, areaRatio) => {
+            if (!Array.isArray(points) || points.length !== 4) return -Infinity;
+            const ordered = orderQuadPoints(points);
+            const top = edgeDistance(ordered[0], ordered[1]);
+            const right = edgeDistance(ordered[1], ordered[2]);
+            const bottom = edgeDistance(ordered[2], ordered[3]);
+            const left = edgeDistance(ordered[3], ordered[0]);
+            const avg = Math.max(1, (top + right + bottom + left) / 4);
+            const irregularity = Math.max(
+                Math.abs(top - avg),
+                Math.abs(right - avg),
+                Math.abs(bottom - avg),
+                Math.abs(left - avg)
+            ) / avg;
+            const regularity = 1 - Math.min(1, irregularity);
+            return (areaRatio * 100) + (regularity * 50);
+        };
 
-            if (approx.rows === 4) {
-                const area = Math.abs(cv.contourArea(approx));
-                if (area > bestArea) {
-                    if (bestQuad) bestQuad.delete();
-                    bestQuad = approx.clone();
-                    bestArea = area;
+        const chooseBestQuad = (contoursVector, opts) => {
+            const settings = opts || {};
+            const minRatio = Number(settings.minRatio || 0.08);
+            const maxRatio = Number(settings.maxRatio || 0.95);
+            const requireConvex = settings.requireConvex !== false;
+            const updateByScore = settings.updateByScore !== false;
+
+            let localBest = null;
+            for (let i = 0; i < contoursVector.size(); i++) {
+                const contour = contoursVector.get(i);
+                const perimeter = cv.arcLength(contour, true);
+                const approx = new cv.Mat();
+                cv.approxPolyDP(contour, approx, 0.02 * perimeter, true);
+
+                const convexOk = !requireConvex || cv.isContourConvex(approx);
+                if (approx.rows === 4 && convexOk) {
+                    const area = Math.abs(cv.contourArea(approx));
+                    const areaRatio = area / imageArea;
+                    if (areaRatio > minRatio && areaRatio < maxRatio) {
+                        const points = contourToPoints(approx);
+                        const score = updateByScore
+                            ? scoreQuadrilateral(points, areaRatio)
+                            : area;
+                        if (!localBest || score > localBest.score) {
+                            localBest = {
+                                points,
+                                score
+                            };
+                        }
+                    }
                 }
+
+                approx.delete();
+                contour.delete();
             }
 
-            approx.delete();
-            contour.delete();
+            return localBest;
+        };
+
+        // Pass 1: strategy from app.js (best overall in RETR_LIST with geometric scoring).
+        cv.medianBlur(gray, blur, 5);
+        cv.adaptiveThreshold(
+            blur,
+            thresh,
+            255,
+            cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv.THRESH_BINARY_INV,
+            21,
+            7
+        );
+        {
+            const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+            cv.morphologyEx(thresh, thresh, cv.MORPH_CLOSE, kernel);
+            kernel.delete();
+        }
+        cv.findContours(thresh, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+        best = chooseBestQuad(contours, {
+            minRatio: 0.08,
+            maxRatio: 0.95,
+            requireConvex: true,
+            updateByScore: true
+        });
+
+        // Pass 2 fallback: previous project strategy can recover some difficult images.
+        if (!best) {
+            cv.GaussianBlur(gray, blur, new cv.Size(7, 7), 0);
+            cv.adaptiveThreshold(blur, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
+            cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+            best = chooseBestQuad(contours, {
+                minRatio: 0.03,
+                maxRatio: 0.98,
+                requireConvex: false,
+                updateByScore: false
+            });
         }
 
         let points = null;
-        if (bestQuad && bestArea > 5000) {
-            points = [];
-            for (let i = 0; i < 4; i++) {
-                const p = bestQuad.intPtr(i, 0);
-                points.push({ x: p[0], y: p[1] });
-            }
-            points = orderQuadPoints(points);
-            points = shrinkQuadToBlack(points);
-            bestQuad.delete();
+        if (best && Array.isArray(best.points) && best.points.length === 4) {
+            points = orderQuadPoints(best.points);
+            points = shrinkQuadToInnerLines(points);
         }
 
         src.delete();
